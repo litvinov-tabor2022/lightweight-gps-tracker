@@ -1,0 +1,29 @@
+{
+  "general": {
+    "id": 123
+  },
+  "mqtt": {
+    "host": "test.mosquitto.org",
+    "port": 8885,
+    "username": "rw",
+    "password": "readwrite",
+    "topic": "gps-tracker"
+  },
+  "gsm": {
+    "enable": true,
+    "apn": "internet",
+    "user": "",
+    "password": ""
+  },
+  "gps": {
+    "enable": false
+  },
+  "waypoints": [
+    {
+      "id": 1,
+      "lat": 0,
+      "lng": 0,
+      "path": ""
+    }
+  ]
+}
