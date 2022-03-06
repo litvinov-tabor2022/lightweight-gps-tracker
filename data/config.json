@@ -1,29 +1,33 @@
 {
   "general": {
-    "id": 123
+    "tracker-id": 123,
+    "accuracy": 100
   },
   "mqtt": {
-    "host": "test.mosquitto.org",
-    "port": 8885,
-    "username": "rw",
-    "password": "readwrite",
+    "host": "mqtt.dev.jenda.eu",
+    "port": 8883,
+    "username": "tracker",
+    "password": "yM3uJAbvOs/9",
     "topic": "gps-tracker"
   },
   "gsm": {
     "enable": true,
-    "apn": "internet",
+    "apn": "internet.t-mobile.cz",
     "user": "",
     "password": ""
   },
   "gps": {
-    "enable": false
+    "enable": true,
+    "fast-fix": true,
+    "sampling-rate": 1000,
+    "minimal-accuracy": 5
   },
   "waypoints": [
     {
       "id": 1,
-      "lat": 0,
-      "lng": 0,
-      "path": ""
+      "lat": 50.1268959,
+      "lon": 14.42045593,
+      "path": "/moses.mp3"
     }
   ]
 }
