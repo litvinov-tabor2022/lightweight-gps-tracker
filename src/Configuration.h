@@ -14,14 +14,20 @@ namespace GPS_TRACKER {
     struct gps_config {
         explicit gps_config() = default;
 
-        gps_config(bool enable, double minimalAccuracy, int positionSampleFrequency, int noPositionsInReport) : enable(
-                enable), minimal_accuracy(minimalAccuracy), positionSampleFrequency(positionSampleFrequency),
-                                                                                                                noPositionsInReport(
-                                                                                                                        noPositionsInReport) {}
+        gps_config(bool enable, int samplingRate, bool fastFix, double minimalAccuracy, int positionSampleFrequency,
+                   int noPositionsInReport) :
+                enable(enable),
+                samplingRate(samplingRate),
+                fastFix(fastFix),
+                minimal_accuracy(minimalAccuracy),
+                positionSampleFrequency(positionSampleFrequency),
+                noPositionsInReport(noPositionsInReport) {}
 
         static gps_config build(JsonVariant &c) {
             return {
                     c["enable"].as<bool>(),
+                    c["sampling-rate"].as<int>(),
+                    c["fast-fix"].as<bool>(),
                     c["minimal-accuracy"].as<double>(),
                     c["positions-in-report"].as<int>(),
                     c["positions-in-report"].as<int>()
@@ -29,7 +35,9 @@ namespace GPS_TRACKER {
         }
 
         bool enable = false;
-        double minimal_accuracy = 9;
+        int samplingRate = 1000;
+        bool fastFix = true;
+        double minimal_accuracy = 0;
         int positionSampleFrequency = 1;
         int noPositionsInReport = 2;
     };
@@ -83,16 +91,19 @@ namespace GPS_TRACKER {
     struct config {
         config() = default;
 
-        config(long trackerId, std::string token) : trackerId(trackerId), token(std::move(token)) {}
+        config(long trackerId, std::string token, double accuracy) : trackerId(trackerId), accuracy(accuracy),
+                                                                     token(std::move(token)) {}
 
         static config build(JsonVariant &c) {
             return config(
                     c["tracker-id"].as<long>(),
-                    c["token"].as<std::string>()
+                    c["token"].as<std::string>(),
+                    c["accuracy"].as<double>()
             );
         }
 
         long trackerId = -1;
+        double accuracy = 100;
         std::string token;
     };
 
@@ -106,7 +117,7 @@ namespace GPS_TRACKER {
         std::string path;
     };
 
-    using waypoints = std::map<int, waypoint>;
+    using waypoints = std::vector<waypoint>;
 
     class Configuration {
     public:
@@ -143,7 +154,7 @@ namespace GPS_TRACKER {
                 std::string path = v["path"];
                 float lat = v["lat"];
                 float lon = v["lon"];
-                WAYPOINTS.insert(std::pair<int, waypoint>(id, waypoint(id, lat, lon, path)));
+                WAYPOINTS.push_back(waypoint(id, lat, lon, path));
             }
 
             return true;
