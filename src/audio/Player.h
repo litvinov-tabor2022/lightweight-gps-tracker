@@ -1,5 +1,5 @@
-#ifndef LIGHTWEIGHT_GPS_TRACKER_SDAUDIOPLAYER_H
-#define LIGHTWEIGHT_GPS_TRACKER_SDAUDIOPLAYER_H
+#ifndef LIGHTWEIGHT_GPS_TRACKER_PLAYER_H
+#define LIGHTWEIGHT_GPS_TRACKER_PLAYER_H
 
 #include <Tasker.h>
 #include <queue>
@@ -22,10 +22,10 @@ namespace AudioPlayer {
         bool uninterruptible;
     };
 
-    class SDAudioPlayer {
+    class Player {
     public:
-        SDAudioPlayer(AudioGenerator *audioGenerator, AudioOutput *audioOutput, AudioFileSource *fileSource,
-                      float volume);
+        Player(AudioGenerator *audioGenerator, AudioOutput *audioOutput, AudioFileSource *fileSource,
+               float volume);
 
         void init();
 
@@ -55,7 +55,8 @@ namespace AudioPlayer {
         float volume;
         bool playingUninterruptible = false;
         std::queue<Sound> fileQueue;
+        bool isPlaying = false;
     };
 }
 
-#endif //LIGHTWEIGHT_GPS_TRACKER_SDAUDIOPLAYER_H
+#endif //LIGHTWEIGHT_GPS_TRACKER_PLAYER_H

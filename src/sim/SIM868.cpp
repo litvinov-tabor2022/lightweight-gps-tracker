@@ -1,22 +1,11 @@
 #include "SIM868.h"
 
-ISIM::STATUS_CODE GPS_TRACKER::SIM868::init() {
-    TinyGsmAutoBaud(Serial2, 9600, 115200);
-//    modem.simUnlock("1234");
-    if (!modem.init()) {
-        Serial.println("Modem connection failed.");
-        return MODEM_INIT_FAILED;
-    }
-    modem.sleepEnable(false);
+GPS_TRACKER::SIM868::SIM868() {}
 
+MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::init() {
     if (configuration.GSM_CONFIG.enable) {
         if (!connectGPRS()) return GSM_CONNECTION_ERROR;
         connectToMqtt();
-        DefaultTasker.loopEvery("mqtt", 100, [this] {
-            std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-            mqttClient.loop();
-        });
-        Serial.println("Modem connected to MQTT");
     }
 
     if (configuration.GPS_CONFIG.enable) {
@@ -33,41 +22,39 @@ ISIM::STATUS_CODE GPS_TRACKER::SIM868::init() {
         else Serial.println("Modem connected to GPS");
     }
 
-
+    if (configuration.GSM_CONFIG.enable) {
+        DefaultTasker.loopEvery("mqtt", 100, [this] {
+            std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+            mqttClient.loop();
+        });
+        Serial.println("Modem connected to MQTT");
+    }
     return Ok;
 }
 
-ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(const std::string &data) {
+MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(const std::string &data) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
-    if (mqttClient.state() != 0) {
+    Serial.printf("Sending data... %d\n", mqttClient.state());
+    if (!mqttClient.connected()) {
         Serial.printf("MQTT client error: %d\n", mqttClient.state());
-        return UNKNOWN_ERROR;
+        Serial.println("Trying to reconnect ...");
+        if (!reconnect()) return UNKNOWN_ERROR;
     }
 
     bool published = mqttClient.publish(configuration.MQTT_CONFIG.topic.c_str(), data.c_str());
-    Serial.printf("Publish %d chars to MQTT end with result: %d\n", data.length(), published);
+    Serial.printf("Publish %d chars to MQTT topic %s end with result: %d\n", data.length(),
+                  configuration.MQTT_CONFIG.topic.c_str(), published);
 
     if (published) {
         return Ok;
     }
 
     return READ_GPS_COORDINATES_FAILED;
-    return ISIM::Ok;
 }
 
-ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(JsonDocument *data) {
-
-//    GPS_COORDINATES actCoordinates;
-//    ISIM::STATUS_CODE actPositionStatus = actualPosition(actCoordinates);
-//    if (actPositionStatus != Ok) {
-//        return actPositionStatus;
-//    }
-
-//    uint8_t buffer[1024];
-//    size_t message_length;
-
-//    actCoordinates.serialize(buffer, message_length);
+MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(JsonDocument *data) {
+    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
     std::string serialized;
     serializeJson(*data, serialized);
@@ -75,9 +62,10 @@ ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(JsonDocument *data) {
     return sendData(serialized);
 }
 
-ISIM::STATUS_CODE GPS_TRACKER::SIM868::actualPosition(GPS_COORDINATES &coordinates) {
+MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::actualPosition(GPSCoordinates *coordinates) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
     if (!isConnected()) {
+        reconnect();
         return MODEM_NOT_CONNECTED;
     }
 
@@ -87,27 +75,29 @@ ISIM::STATUS_CODE GPS_TRACKER::SIM868::actualPosition(GPS_COORDINATES &coordinat
 
     if (modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy, &rawTime.tm_year, &rawTime.tm_mon,
                      &rawTime.tm_mday, &rawTime.tm_hour, &rawTime.tm_min, &rawTime.tm_sec)) {
-
         // Position is out of range
         if (abs(lat) > 90 || abs(lon) > 180) {
             Serial.println("Invalid position read");
-            return UNKNOWN_ERROR;
-        }
-
-        // Accuracy is below the minimal threshold
-        if (accuracy > configuration.GPS_CONFIG.minimal_accuracy) {
-            Serial.printf("Accuracy is to low: %f\n", accuracy);
-            return UNKNOWN_ERROR;
+            return GPS_COORDINATES_OUT_OF_RANGE;
         }
 
         rawTime.tm_year -= 1900;
         rawTime.tm_mon -= 1;
         long timestamp = mktime(&rawTime);
+        Serial.printf("lat: %f, lon: %f, alt: %f, timestamp: %ld\n", lat, lon, alt, timestamp);
 
-        coordinates = GPS_COORDINATES{lat, lon, alt, timestamp};
+        // Accuracy is below the minimal threshold
+        if (accuracy > configuration.GPS_CONFIG.minimal_accuracy) {
+            Serial.printf("Accuracy is too low: %f < %f\n", accuracy, configuration.GPS_CONFIG.minimal_accuracy);
+            return GPS_ACCURACY_TOO_LOW;
+        }
+
+        *coordinates = GPSCoordinates(lat, lon, alt, timestamp);
 
         return Ok;
     }
+
+    reconnect();
 
     return READ_GPS_COORDINATES_FAILED;
 }
@@ -119,6 +109,16 @@ bool GPS_TRACKER::SIM868::isConnected() {
 
 bool GPS_TRACKER::SIM868::connectGPRS() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+
+    TinyGsmAutoBaud(Serial2, 9600, 115200);
+
+    if (!modem.init()) {
+        Serial.println("Modem connection failed.");
+        return false;
+    }
+
+    modem.sleepEnable(false);
+
     Serial.printf("[I] Modem: %s\n", modem.getModemInfo().c_str());
 
     bool modemConnectedSuccessfully = false;
@@ -141,16 +141,22 @@ bool GPS_TRACKER::SIM868::connectGPRS() {
         Serial.println(" succeed!");
         modemConnectedSuccessfully = true;
     }
+//    stateManager->setGsmState(GSM::CONNECTED);
     return true;
 }
 
 bool GPS_TRACKER::SIM868::connectToMqtt() {
-    mqttClient.setServer(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
-//    mqttClient.setKeepAlive((REPORT_FREQUENCE * 2) / 1000);
+    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
+    Serial.println("Connecting to MQTT....");
+    mqttClient.setServer(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
+
+    //    mqttClient.setKeepAlive((REPORT_FREQUENCE * 2) / 1000);
     int errorAttempts = 0;
+
     // Loop until we're reconnected
     while (!mqttClient.connected()) {
+        Tasker::yield();
         // Create a random client ID
         String clientId = "TRACKER-";
         clientId += String(random(0xffff), HEX);
@@ -162,16 +168,17 @@ bool GPS_TRACKER::SIM868::connectToMqtt() {
         if (mqttClient.connect(clientId.c_str(),
                                configuration.MQTT_CONFIG.username.c_str(),
                                configuration.MQTT_CONFIG.password.c_str())) {
-            Serial.println(sendData("Hello"));
+//            stateManager->setMqttState(MQTT::CONNECTED);
             Serial.printf(" connected to %s, topic: %s, username: %s, password: %s\n",
                           configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.topic.c_str(),
                           configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
         } else {
+//            stateManager->setMqttState(MQTT::DISCONNECTED);
             Serial.printf("failed, rc=%d try again in 5 seconds\n", mqttClient.state());
             errorAttempts++;
             if (errorAttempts > 5) Serial.println("MQTT connection error.");
             // Wait 5 seconds before retrying
-//            Tasker::sleep(5000);
+            Tasker::sleep(5000);
         }
     }
 
@@ -181,41 +188,158 @@ bool GPS_TRACKER::SIM868::connectToMqtt() {
 bool GPS_TRACKER::SIM868::connectGPS() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
+    modem.disableGPS();
+
+    //    if (configuration.GPS_CONFIG.fastFix) {
+    //        fastFix();
+    //    }
     if (!modem.enableGPS()) {
-        return false;
+        Serial.println("Enabling GPS failed");
     }
 
     float lat, lon, speed, alt, accuracy;
     int vsat, usat;
-    Serial.print("Waiting for GPS");
+    Serial.println("Waiting for GPS");
     while (!modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy)) {
         if (this->isConnected()) {
+            Serial.println(modem.getGPSraw());
+            Serial.printf("vsat: %d, usat: %d\n", vsat, usat);
             Tasker::sleep(1500);
         } else {
             return false;
         }
     }
-    Serial.println();
 
     Serial.println("GPS successfully enabled");
     return true;
 }
 
+bool GPS_TRACKER::SIM868::isGpsConnected() {
+    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    float lat, lon;
+    return modem.getGPS(&lat, &lon);
+}
+
+bool GPS_TRACKER::SIM868::isMqttConnected() {
+    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    if (mqttClient.connected()) {
+        Serial.println("MQTT client connected");
+        return true;
+    } else {
+        Serial.println("MQTT client disconnected");
+        return false;
+    }
+}
+
+
 bool GPS_TRACKER::SIM868::reconnect() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-    while (!isConnected()) {
-        if (!connectGPRS()) {
-            continue;
+    Serial.println("Reconnecting");
+    int reconnectAttempts = 0;
+    while (!isConnected() || !isMqttConnected() || !isGpsConnected()) {
+        if (reconnectAttempts > 5) {
+            esp_restart(); // TODO skipp if playing music
+//            return false;
         }
-        if (!connectGPS()) {
-            continue;
+        if (!isModemConnected()) {
+            Serial.println("Reconnecting GPRS modem");
+            if (!connectGPRS()) {
+                reconnectAttempts++;
+            }
+        } else {
+            Serial.println("GSM modem connected");
+        }
+        if (!isGpsConnected()) {
+            Serial.println("Reconnecting GPS");
+            if (!connectGPS()) {
+                reconnectAttempts++;
+            }
+        } else {
+            Serial.println("GPS modem connected");
+        }
+        if (!isMqttConnected()) {
+            Serial.println("Reconnecting MQTT client");
+            if (!connectToMqtt()) {
+                reconnectAttempts++;
+            }
+        } else {
+            Serial.println("MQTT modem connected");
         }
     }
-
+    Serial.println("Reconnecting done");
     return true;
 }
 
-GPS_TRACKER::SIM868::SIM868() {}
+void GPS_TRACKER::SIM868::fastFix() {
+    Serial.println("FastFix");
 
-namespace GPS_TRACKER {
+    bool responseStatus = false;
+    modem.sendAT(GF("+SAPBR=3,1,\"CONTYPE\",\"GPRS\""));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+SAPBR=3,1,\"APN\",\"internet.t-mobile.cz\""));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+SAPBR=1,1"));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+SAPBR=2,1"));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+CNTPCID=1"));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+CNTP=\"202.112.29.82\""));
+    modem.waitResponse();
+
+//    modem.sendAT(GF("+CNTP?"));
+//    modem.waitResponse();
+
+    modem.sendAT(GF("+CNTP"));
+    modem.waitResponse(1000L, GF("+CNTP: 1"));
+
+//    modem.sendAT(GF("+CCLK?"));
+//    modem.waitResponse();
+
+    modem.sendAT(GF("+CLBS=1,1"));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+CGNSSAV=3,3"));
+    modem.waitResponse();
+
+    // HTTP REQUEST
+    modem.sendAT(GF("+HTTPINIT"));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+HTTPPARA=\"CID\",1"));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+HTTPPARA=\"URL\",\"http://wepodownload.mediatek.com/EPO_GPS_3_1.DAT\""));
+    modem.waitResponse();
+
+    modem.sendAT(GF("+HTTPACTION=0"));
+    modem.waitResponse(20000L, GF("+HTTPACTION: 0,200,27648"));
+
+    modem.sendAT(GF("+HTTPTERM"));
+    modem.waitResponse();
+
+//    modem.sendAT(GF("+FSLS=C:\\User\\"));
+//    modem.waitResponse();
+//    modem.waitResponse();
+//    modem.waitResponse();
+
+    modem.sendAT(GF("+CGNSCHK=3,1"));
+    modem.waitResponse();
+
+//    modem.sendAT(GF("+CGNSPWR=1"));
+//    if(modem.waitResponse(10000L, GF("+CGNSPWR: 1"))){
+//        Serial.println("FastFix: GPS power on failed");
+//    }
+
+    modem.sendAT(GF("+CGNSAID=31,1,1"));
+    if (modem.waitResponse(20000L, GF("+CGNSAID")) != 1) {
+        Serial.println("FastFix: Upload failed");
+    }
+
+    Serial.println("FastFix: DONE");
 }

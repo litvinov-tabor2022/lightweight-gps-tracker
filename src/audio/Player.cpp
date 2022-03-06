@@ -1,9 +1,9 @@
-#include "SDAudioPlayer.h"
+#include "Player.h"
 
-AudioPlayer::SDAudioPlayer::SDAudioPlayer(AudioGenerator *audioGenerator,
-                                          AudioOutput *audioOutput,
-                                          AudioFileSource *fileSource,
-                                          float volume) :
+AudioPlayer::Player::Player(AudioGenerator *audioGenerator,
+                            AudioOutput *audioOutput,
+                            AudioFileSource *fileSource,
+                            float volume) :
         audioGenerator(audioGenerator),
         audioOutput(audioOutput),
         fileSource(fileSource),
@@ -12,14 +12,14 @@ AudioPlayer::SDAudioPlayer::SDAudioPlayer(AudioGenerator *audioGenerator,
 }
 
 
-void AudioPlayer::SDAudioPlayer::init() {
+void AudioPlayer::Player::init() {
     this->audioGenerator->begin(this->fileSource, this->audioOutput);
 }
 
 /**
  * Routine for reading and reproducing samples.
  * */
-void AudioPlayer::SDAudioPlayer::play() {
+void AudioPlayer::Player::play() {
     SoundTasker.loop("sound", [this] {
         if (!audioGenerator->loop()) {
             audioGenerator->stop();
@@ -29,12 +29,15 @@ void AudioPlayer::SDAudioPlayer::play() {
             audioGenerator->stop();
             audioGenerator->desync();
             playingUninterruptible = false;
+            if (isPlaying) {
+                esp_restart();
+            }
             playNext();
         }
     });
 }
 
-bool AudioPlayer::SDAudioPlayer::setVolume(int newVolume) {
+bool AudioPlayer::Player::setVolume(int newVolume) {
     if (newVolume < 0 || newVolume > 200) {
         Serial.printf("Volume is out of range (value %d)\n", newVolume);
         return false;
@@ -45,7 +48,7 @@ bool AudioPlayer::SDAudioPlayer::setVolume(int newVolume) {
     return true;
 }
 
-void AudioPlayer::SDAudioPlayer::selectFile(const Sound &sound) {
+void AudioPlayer::Player::selectFile(const Sound &sound) {
     playingUninterruptible = sound.uninterruptible;
     fileSource->open(sound.path.c_str());
     if (!audioGenerator->isRunning()) {
@@ -53,21 +56,22 @@ void AudioPlayer::SDAudioPlayer::selectFile(const Sound &sound) {
     }
 }
 
-void AudioPlayer::SDAudioPlayer::enqueueFile(const std::string &path, bool uninterruptible) {
+void AudioPlayer::Player::enqueueFile(const std::string &path, bool uninterruptible) {
     std::lock_guard<std::mutex> lock(queueMutex);
     fileQueue.push(Sound(path, uninterruptible));
 }
 
-void AudioPlayer::SDAudioPlayer::playNext() {
+void AudioPlayer::Player::playNext() {
     std::lock_guard<std::mutex> lock(queueMutex);
 
     if (fileQueue.empty()) return;
     Serial.printf("Playing next file: %s\n", fileQueue.front().path.c_str());
     selectFile(fileQueue.front());
     fileQueue.pop();
+    isPlaying = true;
 }
 
-void AudioPlayer::SDAudioPlayer::playFile(const std::string &path, bool uninterruptible) {
+void AudioPlayer::Player::playFile(const std::string &path, bool uninterruptible) {
     if (playingUninterruptible) {
         std::lock_guard<std::mutex> lock(queueMutex);
         Serial.printf("File enqueued to front: %s\n", path.c_str());
@@ -77,7 +81,8 @@ void AudioPlayer::SDAudioPlayer::playFile(const std::string &path, bool uninterr
     }
 }
 
-void AudioPlayer::SDAudioPlayer::stop() {
+void AudioPlayer::Player::stop() {
     this->audioGenerator->desync();
     this->audioGenerator->stop();
+    this->audioOutput->stop();
 }
