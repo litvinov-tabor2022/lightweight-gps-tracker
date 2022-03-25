@@ -1,12 +1,15 @@
 #include <Arduino.h>
 #include "Configuration.h"
-#include "sim/SIM868.h"
+//#include "sim/SIM868.h"
+#include "sim/SIM7000G.h"
 #include "SPIFFS.h"
 #include "audio/Player.h"
 #include "Protocol.h"
 #include "AudioFileSourceSPIFFS.h"
 
-GPS_TRACKER::SIM868 *sim;
+
+Logging::Logger logger = Logging::Logger::serialLogger(Logging::DEBUG);
+GPS_TRACKER::SIM7000G *sim;
 GPS_TRACKER::Configuration *configuration;
 GPS_TRACKER::StateManager *stateManager;
 AudioPlayer::Player *audioPlayer;
@@ -16,6 +19,11 @@ AudioFileSourceSPIFFS source;
 
 void setup() {
     Serial.begin(115200);
+    pinMode(PWR_PIN, OUTPUT);
+    digitalWrite(PWR_PIN, HIGH);
+    delay(300);
+    digitalWrite(PWR_PIN, LOW);
+
     Serial.println("Initialization start....");
     if (!SPIFFS.begin()) {
         Serial.println("SPIFFS init failed.");
@@ -41,7 +49,7 @@ void setup() {
     stateManager->begin();
 
     // ------ GSM/GPS
-    sim = new GPS_TRACKER::SIM868(*configuration);
+    sim = new GPS_TRACKER::SIM7000G(&logger, *configuration);
     MODEM::ISIM::STATUS_CODE initRes = sim->init();
     if (initRes != MODEM::ISIM::Ok) {
         Serial.printf("Modem initialization failed> %u\n", initRes);
