@@ -1,9 +1,11 @@
 #include "Player.h"
 
-AudioPlayer::Player::Player(AudioGenerator *audioGenerator,
+AudioPlayer::Player::Player(Logging::Logger *logger,
+                            AudioGenerator *audioGenerator,
                             AudioOutput *audioOutput,
                             AudioFileSource *fileSource,
                             float volume) :
+        logger(logger),
         audioGenerator(audioGenerator),
         audioOutput(audioOutput),
         fileSource(fileSource),
@@ -33,18 +35,19 @@ void AudioPlayer::Player::play() {
                 esp_restart();
             }
             playNext();
+            playNext();
         }
     });
 }
 
 bool AudioPlayer::Player::setVolume(int newVolume) {
     if (newVolume < 0 || newVolume > 200) {
-        Serial.printf("Volume is out of range (value %d)\n", newVolume);
+        logger->printf(Logging::INFO, "Volume is out of range (value %d)\n", newVolume);
         return false;
     }
     volume = (float) newVolume / 100;
     audioOutput->SetGain(volume);
-    Serial.printf("Volume set to %f\n", volume);
+    logger->printf(Logging::INFO, "Volume set to %f\n", volume);
     return true;
 }
 
@@ -65,7 +68,7 @@ void AudioPlayer::Player::playNext() {
     std::lock_guard<std::mutex> lock(queueMutex);
 
     if (fileQueue.empty()) return;
-    Serial.printf("Playing next file: %s\n", fileQueue.front().path.c_str());
+    logger->printf(Logging::INFO, "Playing next file: %s\n", fileQueue.front().path.c_str());
     selectFile(fileQueue.front());
     fileQueue.pop();
     isPlaying = true;
@@ -74,7 +77,7 @@ void AudioPlayer::Player::playNext() {
 void AudioPlayer::Player::playFile(const std::string &path, bool uninterruptible) {
     if (playingUninterruptible) {
         std::lock_guard<std::mutex> lock(queueMutex);
-        Serial.printf("File enqueued to front: %s\n", path.c_str());
+        logger->printf(Logging::INFO, "File enqueued to front: %s\n", path.c_str());
         fileQueue.push(Sound(path, uninterruptible));
     } else {
         selectFile(Sound(path, uninterruptible));

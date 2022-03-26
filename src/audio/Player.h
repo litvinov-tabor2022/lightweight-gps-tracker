@@ -10,6 +10,7 @@
 #include "AudioGeneratorMP3.h"
 #include "AudioOutputI2S.h"
 #include "StateManager.h"
+#include "logger/Logger.h"
 
 namespace AudioPlayer {
     struct Sound {
@@ -24,7 +25,7 @@ namespace AudioPlayer {
 
     class Player {
     public:
-        Player(AudioGenerator *audioGenerator, AudioOutput *audioOutput, AudioFileSource *fileSource,
+        Player(Logging::Logger *logger, AudioGenerator *audioGenerator, AudioOutput *audioOutput, AudioFileSource *fileSource,
                float volume);
 
         void init();
@@ -48,6 +49,7 @@ namespace AudioPlayer {
 
         void selectFile(const Sound &sound);
 
+        Logging::Logger *logger;
         std::mutex queueMutex; // access to queue must be exclusive
         AudioGenerator *audioGenerator;
         AudioOutput *audioOutput;
