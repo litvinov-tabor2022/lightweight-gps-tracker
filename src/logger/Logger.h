@@ -86,6 +86,9 @@ namespace Logging {
             return new Logger{telnetStream, level};
         }
 
+        /**
+         * WiFi must be initialized before calling this method!
+         */
         static Logger *serialAndTelnetLogger(Level level = WARNING) {
             auto telnetStream = new TelnetStreamClass(23);
             telnetStream->begin(23);
