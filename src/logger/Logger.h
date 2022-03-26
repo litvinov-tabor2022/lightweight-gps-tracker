@@ -5,30 +5,14 @@
 #include <TelnetStream.h>
 
 namespace {
-    class NullStream : public Stream {
+    class NullStream : public Print {
     public:
         size_t write(uint8_t uint8) override {
             return 0;
         }
-
-        int available() override {
-            return 0;
-        }
-
-        int read() override {
-            return 0;
-        }
-
-        int peek() override {
-            return 0;
-        }
-
-        void flush() override {
-
-        }
     };
 
-    class StreamSplitter : public Stream {
+    class StreamSplitter : public Print {
     public:
         void addStream(Stream *newStream) {
             streams.push_back(newStream);
@@ -40,24 +24,6 @@ namespace {
                 writtenBytes += stream->write(uint8);
             }
             return writtenBytes;
-        }
-
-        int available() override {
-            return 0;
-        }
-
-        int read() override {
-            return 0;
-        }
-
-        int peek() override {
-            return 0;
-        }
-
-        void flush() override {
-            for (auto stream: streams) {
-                stream->flush();
-            }
         }
 
     private:
@@ -130,9 +96,9 @@ namespace Logging {
             return logger->write(uint8);
         }
 
-        Logger(Stream *logger) : logger(logger) {}
+        Logger(Print *logger) : logger(logger) {}
 
-        Logger(Stream *logger, Level level) : logger(logger), minLevel(level) {}
+        Logger(Print *logger, Level level) : logger(logger), minLevel(level) {}
 
         void rec_printf(const char *format) {
             logger->print(format);
@@ -166,7 +132,7 @@ namespace Logging {
             }
         }
 
-        Stream *logger;
+        Print *logger;
         Level minLevel;
     };
 }
