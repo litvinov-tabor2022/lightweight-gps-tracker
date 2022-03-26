@@ -55,14 +55,13 @@ namespace {
         }
 
         void flush() override {
-            dst1->flush();
-            dst2->flush();
+            for (auto stream: streams) {
+                stream->flush();
+            }
         }
 
     private:
         std::vector<Stream *> streams;
-        Stream *dst1;
-        Stream *dst2;
     };
 }
 

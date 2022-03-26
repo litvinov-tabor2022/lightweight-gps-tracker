@@ -7,11 +7,18 @@
 #include "Protocol.h"
 #include "AudioFileSourceSPIFFS.h"
 
+using namespace Logging;
+using namespace GPS_TRACKER;
+using namespace MODEM;
 
-Logging::Logger logger = Logging::Logger::serialLogger(Logging::DEBUG);
-GPS_TRACKER::SIM7000G *sim;
-GPS_TRACKER::Configuration *configuration;
-GPS_TRACKER::StateManager *stateManager;
+IPAddress IP = {10, 10, 1, 1};
+IPAddress gateway = {10, 10, 1, 1};
+IPAddress NMask = {255, 255, 255, 0};
+
+Logger *logger;
+SIM7000G *sim;
+Configuration *configuration;
+StateManager *stateManager;
 AudioPlayer::Player *audioPlayer;
 AudioOutputI2S out;
 AudioGeneratorMP3 mp3;
@@ -28,30 +35,43 @@ void setup() {
     if (!SPIFFS.begin()) {
         Serial.println("SPIFFS init failed.");
     }
-
     pinMode(0, PULLUP);
+
+
     DefaultTasker.loopEvery("", 250, [] {
         if (!digitalRead(0)) {
             Serial.println("Deleting persisted state");
-            GPS_TRACKER::StateManager::removePersistedState();
+            StateManager::removePersistedState();
         }
     });
 
     // ------ CONFIGURATION
-    configuration = new GPS_TRACKER::Configuration();
+    configuration = new Configuration();
     if (!configuration->read()) {
         Serial.println("GPS TRACKER INITIALIZATION FAILED!!!!!!!!");
     } else {
         Serial.printf("Configuration loaded.\n\t # waypoints: %d\n", configuration->WAYPOINTS.size());
     }
 
-    stateManager = new GPS_TRACKER::StateManager(configuration);
+    stateManager = new StateManager(configuration);
     stateManager->begin();
 
+    String trackerSSID = "TRACKER-" + (String) configuration->CONFIG.trackerId;
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(trackerSSID.c_str(), "tracker123");
+    WiFi.softAPConfig(IP, IP, NMask);
+
+    IPAddress myIP = WiFi.softAPIP();
+    Serial.println();
+    Serial.print("AP IP address: ");
+    Serial.println(myIP);
+
+    logger = Logger::serialAndTelnetLogger(Logging::DEBUG);
+
     // ------ GSM/GPS
-    sim = new GPS_TRACKER::SIM7000G(&logger, *configuration);
-    MODEM::ISIM::STATUS_CODE initRes = sim->init();
-    if (initRes != MODEM::ISIM::Ok) {
+    sim = new SIM7000G(logger, *configuration);
+    STATUS_CODE initRes = sim->init();
+    if (initRes != Ok) {
         Serial.printf("Modem initialization failed> %u\n", initRes);
     }
 
@@ -61,20 +81,20 @@ void setup() {
 //    audioPlayer->enqueueFile("/moses.mp3");
     audioPlayer->play();
 
-    stateManager->onReachedWaypoint([](const GPS_TRACKER::waypoint &w) {
+    stateManager->onReachedWaypoint([](const waypoint &w) {
         audioPlayer->enqueueFile(w.path);
     });
 
     // ------
     DefaultTasker.loopEvery("sender", 2000, [] {
-        GPS_TRACKER::GPSCoordinates coordinates;
-        MODEM::ISIM::STATUS_CODE actPositionState = sim->actualPosition(&coordinates);
-        if (MODEM::ISIM::Ok != actPositionState) {
+        GPSCoordinates coordinates;
+        STATUS_CODE actPositionState = sim->actualPosition(&coordinates);
+        if (Ok != actPositionState) {
             Serial.printf("Position is not valid, skipping: %d\n", actPositionState);
             return;
         }
         stateManager->updatePosition(coordinates);
-        GPS_TRACKER::Message message(configuration->CONFIG.trackerId, stateManager->getVisitedWaypoints(), coordinates);
+        Message message(configuration->CONFIG.trackerId, stateManager->getVisitedWaypoints(), coordinates);
         std::string serializeMessage;
         if (!message.serialize(serializeMessage)) {
             Serial.println("Message serialization error");
