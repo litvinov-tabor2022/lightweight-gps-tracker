@@ -1,8 +1,8 @@
-#include <utility>
-#include "Arduino.h"
-
 #ifndef LIGHTWEIGHT_GPS_TRACKER_PROTOCOL_H
 #define LIGHTWEIGHT_GPS_TRACKER_PROTOCOL_H
+
+#include <utility>
+#include "Arduino.h"
 
 namespace GPS_TRACKER {
     struct Serializable {
@@ -49,7 +49,6 @@ namespace GPS_TRACKER {
         bool serialize(std::string &buffer) const override {
             std::string dbg;
             serializeJson(toJson().getMember("coordinates"), dbg);
-            Serial.printf("coordinates: %s\n", dbg.c_str());
             if (serializeJson(toJson(), buffer) > 0) return true;
             else return false;
         }
