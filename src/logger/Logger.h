@@ -1,13 +1,10 @@
-#ifndef LIGHTWEIGHT_GPS_TRACKER_LOGGER_H
-#define LIGHTWEIGHT_GPS_TRACKER_LOGGER_H
+#ifndef LOGGING_LOGGER_H
+#define LOGGING_LOGGER_H
 
 #include "Arduino.h"
+#include <TelnetStream.h>
 
-namespace Logging {
-    enum Level {
-        DEBUG, INFO, WARNING, ERROR
-    };
-
+namespace {
     class NullStream : public Stream {
     public:
         size_t write(uint8_t uint8) override {
@@ -31,14 +28,72 @@ namespace Logging {
         }
     };
 
-    class Logger{
+    class StreamSplitter : public Stream {
     public:
-        static Logger serialLogger(Level level = WARNING) {
-            return {&Serial, level};
+        void addStream(Stream *newStream) {
+            streams.push_back(newStream);
         }
 
-        static Logger nullLogger() {
-            return {new NullStream};
+        size_t write(uint8_t uint8) override {
+            size_t writtenBytes = 0;
+            for (auto stream: streams) {
+                writtenBytes += stream->write(uint8);
+            }
+            return writtenBytes;
+        }
+
+        int available() override {
+            return 0;
+        }
+
+        int read() override {
+            return 0;
+        }
+
+        int peek() override {
+            return 0;
+        }
+
+        void flush() override {
+            dst1->flush();
+            dst2->flush();
+        }
+
+    private:
+        std::vector<Stream *> streams;
+        Stream *dst1;
+        Stream *dst2;
+    };
+}
+
+namespace Logging {
+    enum Level {
+        DEBUG, INFO, WARNING, ERROR
+    };
+
+    class Logger : public Print {
+    public:
+        static Logger *serialLogger(Level level = WARNING) {
+            return new Logger{&Serial, level};
+        }
+
+        static Logger *nullLogger() {
+            return new Logger{new NullStream};
+        }
+
+        static Logger *telnetLogger(Level level = WARNING) {
+            auto telnetStream = new TelnetStreamClass(23);
+            telnetStream->begin(23);
+            return new Logger{telnetStream, level};
+        }
+
+        static Logger *serialAndTelnetLogger(Level level = WARNING) {
+            auto telnetStream = new TelnetStreamClass(23);
+            telnetStream->begin(23);
+            auto splitter = new StreamSplitter();
+            splitter->addStream(&Serial);
+            splitter->addStream(telnetStream);
+            return new Logger{splitter, level};
         }
 
         void print(Level level, const String &string) {
@@ -69,6 +124,10 @@ namespace Logging {
         }
 
     private:
+        size_t write(uint8_t uint8) override {
+            return logger->write(uint8);
+        }
+
         Logger(Stream *logger) : logger(logger) {}
 
         Logger(Stream *logger, Level level) : logger(logger), minLevel(level) {}
@@ -81,6 +140,7 @@ namespace Logging {
         void rec_printf(const char *format, T value, Targs... Fargs) {
             for (; *format != '\0'; format++) {
                 if (*format == '%') {
+                    format++;
                     logger->print(value);
                     rec_printf(format + 1, Fargs...);
                     return;
@@ -110,4 +170,4 @@ namespace Logging {
 }
 
 
-#endif //LIGHTWEIGHT_GPS_TRACKER_LOGGER_H
+#endif //LOGGING_LOGGER_H

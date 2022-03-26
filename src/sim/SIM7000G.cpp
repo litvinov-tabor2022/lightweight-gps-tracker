@@ -1,6 +1,6 @@
 #include "SIM7000G.h"
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
+MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
 
     // POWER ON GSM MODULE
     pinMode(PWR_PIN, OUTPUT);
@@ -37,7 +37,7 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     return Ok;
 }
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(const std::string &data) {
+MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(const std::string &data) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
     logger->printf(Logging::INFO, "Sending data... %d\n", mqttClient.state());
@@ -58,7 +58,7 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(const std::string &data
     return READ_GPS_COORDINATES_FAILED;
 }
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(JsonDocument *data) {
+MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(JsonDocument *data) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
     std::string serialized;
@@ -67,7 +67,7 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(JsonDocument *data) {
     return sendData(serialized);
 }
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordinates) {
+MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordinates) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
     if (!isConnected()) {
         reconnect();
@@ -93,7 +93,8 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *c
 
         // Accuracy is below the minimal threshold
         if (accuracy > configuration.GPS_CONFIG.minimal_accuracy) {
-            logger->printf(Logging::WARNING, "Accuracy is too low: %f < %f\n", accuracy, configuration.GPS_CONFIG.minimal_accuracy);
+            logger->printf(Logging::WARNING, "Accuracy is too low: %f < %f\n", accuracy,
+                           configuration.GPS_CONFIG.minimal_accuracy);
             return GPS_ACCURACY_TOO_LOW;
         }
 
@@ -102,7 +103,7 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *c
         return Ok;
     }
 
-    reconnect();
+//    reconnect();
 
     return READ_GPS_COORDINATES_FAILED;
 }
@@ -118,6 +119,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
 //    TinyGsmAutoBaud(SerialAT, 9600, 115200);
     SerialAT.begin(UART_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
 
+    // TODO: is this needed
     if (!modem.restart()) {
         logger->println(Logging::ERROR, "Failed to restart modem, attempting to continue without restarting");
         return false;
@@ -206,7 +208,7 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
 //            stateManager->setMqttState(MQTT::DISCONNECTED);
             logger->printf(Logging::ERROR, "failed, rc=%d try again in 5 seconds\n", mqttClient.state());
             errorAttempts++;
-            if (errorAttempts > 5) Serial.println("MQTT connection error.");
+            if (errorAttempts > 5) logger->println(Logging::ERROR, "MQTT connection error.");
             // Wait 5 seconds before retrying
             Tasker::sleep(5000);
         }
@@ -237,8 +239,8 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     logger->println(Logging::INFO, "Waiting for GPS");
     while (!modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy)) {
         if (this->isConnected()) {
-            Serial.println(modem.getGPSraw());
-            Serial.printf("vsat: %d, usat: %d\n", vsat, usat);
+            logger->println(Logging::INFO, modem.getGPSraw());
+            logger->printf(Logging::INFO, "vsat: %d, usat: %d\n", vsat, usat);
             Tasker::sleep(1500);
         } else {
             return false;
@@ -273,7 +275,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
     int reconnectAttempts = 0;
     while (!isConnected() || !isMqttConnected() || !isGpsConnected()) {
         if (reconnectAttempts > 5) {
-            esp_restart(); // TODO skipp if playing music
+//            esp_restart(); // TODO skipp if playing music
 //            return false;
         }
         if (!isModemConnected()) {
