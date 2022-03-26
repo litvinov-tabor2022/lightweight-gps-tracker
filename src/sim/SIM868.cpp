@@ -2,7 +2,7 @@
 
 GPS_TRACKER::SIM868::SIM868() {}
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::init() {
+MODEM::STATUS_CODE GPS_TRACKER::SIM868::init() {
     if (configuration.GSM_CONFIG.enable) {
         if (!connectGPRS()) return GSM_CONNECTION_ERROR;
         connectToMqtt();
@@ -32,7 +32,7 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::init() {
     return Ok;
 }
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(const std::string &data) {
+MODEM::STATUS_CODE GPS_TRACKER::SIM868::sendData(const std::string &data) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
     Serial.printf("Sending data... %d\n", mqttClient.state());
@@ -53,7 +53,7 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(const std::string &data) 
     return READ_GPS_COORDINATES_FAILED;
 }
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(JsonDocument *data) {
+MODEM::STATUS_CODE GPS_TRACKER::SIM868::sendData(JsonDocument *data) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
     std::string serialized;
@@ -62,7 +62,7 @@ MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::sendData(JsonDocument *data) {
     return sendData(serialized);
 }
 
-MODEM::ISIM::STATUS_CODE GPS_TRACKER::SIM868::actualPosition(GPSCoordinates *coordinates) {
+MODEM::STATUS_CODE GPS_TRACKER::SIM868::actualPosition(GPSCoordinates *coordinates) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
     if (!isConnected()) {
         reconnect();
@@ -190,9 +190,10 @@ bool GPS_TRACKER::SIM868::connectGPS() {
 
     modem.disableGPS();
 
-    //    if (configuration.GPS_CONFIG.fastFix) {
-    //        fastFix();
-    //    }
+    if (configuration.GPS_CONFIG.fastFix) {
+        fastFix();
+    }
+
     if (!modem.enableGPS()) {
         Serial.println("Enabling GPS failed");
     }
@@ -276,52 +277,66 @@ void GPS_TRACKER::SIM868::fastFix() {
     bool responseStatus = false;
     modem.sendAT(GF("+SAPBR=3,1,\"CONTYPE\",\"GPRS\""));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+SAPBR=3,1,\"APN\",\"internet.t-mobile.cz\""));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+SAPBR=1,1"));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+SAPBR=2,1"));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+CNTPCID=1"));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+CNTP=\"202.112.29.82\""));
     modem.waitResponse();
 
 //    modem.sendAT(GF("+CNTP?"));
 //    modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+CNTP"));
     modem.waitResponse(1000L, GF("+CNTP: 1"));
 
 //    modem.sendAT(GF("+CCLK?"));
 //    modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+CLBS=1,1"));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+CGNSSAV=3,3"));
     modem.waitResponse();
+    delay(20);
 
     // HTTP REQUEST
     modem.sendAT(GF("+HTTPINIT"));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+HTTPPARA=\"CID\",1"));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+HTTPPARA=\"URL\",\"http://wepodownload.mediatek.com/EPO_GPS_3_1.DAT\""));
     modem.waitResponse();
+    delay(20);
 
     modem.sendAT(GF("+HTTPACTION=0"));
     modem.waitResponse(20000L, GF("+HTTPACTION: 0,200,27648"));
+    delay(20);
 
     modem.sendAT(GF("+HTTPTERM"));
     modem.waitResponse();
+    delay(20);
 
 //    modem.sendAT(GF("+FSLS=C:\\User\\"));
 //    modem.waitResponse();
@@ -330,6 +345,7 @@ void GPS_TRACKER::SIM868::fastFix() {
 
     modem.sendAT(GF("+CGNSCHK=3,1"));
     modem.waitResponse();
+    delay(20);
 
 //    modem.sendAT(GF("+CGNSPWR=1"));
 //    if(modem.waitResponse(10000L, GF("+CGNSPWR: 1"))){

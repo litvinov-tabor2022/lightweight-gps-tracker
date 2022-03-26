@@ -5,23 +5,23 @@
 #include "Protocol.h"
 
 namespace MODEM {
+    enum STATUS_CODE {
+        Ok,
+        MODEM_INIT_FAILED,
+        GSM_CONNECTION_ERROR,
+        GPS_CONNECTION_ERROR,
+        READ_GPS_COORDINATES_FAILED,
+        MODEM_NOT_CONNECTED,
+        GPS_ACCURACY_TOO_LOW,
+        GPS_COORDINATES_OUT_OF_RANGE,
+        UNKNOWN_ERROR
+    };
+
     class ISIM {
     public:
-        enum STATUS_CODE {
-            Ok,
-            MODEM_INIT_FAILED,
-            GSM_CONNECTION_ERROR,
-            GPS_CONNECTION_ERROR,
-            READ_GPS_COORDINATES_FAILED,
-            MODEM_NOT_CONNECTED,
-            GPS_ACCURACY_TOO_LOW,
-            GPS_COORDINATES_OUT_OF_RANGE,
-            UNKNOWN_ERROR
-        };
+        virtual STATUS_CODE init() = 0;
 
-        virtual ISIM::STATUS_CODE init() = 0;
-
-        virtual ISIM::STATUS_CODE sendData(JsonDocument *data) = 0;
+        virtual STATUS_CODE sendData(JsonDocument *data) = 0;
 
         virtual STATUS_CODE actualPosition(GPS_TRACKER::GPSCoordinates *coordinates) = 0;
     };

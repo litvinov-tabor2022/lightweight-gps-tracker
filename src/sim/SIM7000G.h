@@ -19,10 +19,9 @@
 #include <mutex>
 
 namespace GPS_TRACKER {
-#define uS_TO_S_FACTOR 1000000ULL  // Conversion factor for micro seconds to seconds
-#define TIME_TO_SLEEP  60          // Time ESP32 will go to sleep (in seconds)
+    using namespace MODEM;
 
-#define SerialAT Serial1
+#define SerialAT    Serial1
 #define UART_BAUD   9600
 #define PIN_DTR     25
 #define PIN_TX      27
@@ -35,7 +34,7 @@ namespace GPS_TRACKER {
 #define SD_CS       13
 #define LED_PIN     12
 
-    class SIM7000G : MODEM::ISIM {
+    class SIM7000G : ISIM {
 /**
      * Class for interacting with SIM868 module.
      * Call init() method before you start calling others.
@@ -44,11 +43,11 @@ namespace GPS_TRACKER {
      * */
     public:
         explicit SIM7000G(Logging::Logger *logger, GPS_TRACKER::Configuration &config) : logger(logger),
-                                                                                configuration(config) {};
+                                                                                         configuration(config) {};
 
-        ISIM::STATUS_CODE sendData(JsonDocument *data) override;
+        STATUS_CODE sendData(JsonDocument *data) override;
 
-        ISIM::STATUS_CODE sendData(const std::string &data);
+        STATUS_CODE sendData(const std::string &data);
 
         /**
          * @return `MODEM_NOT_CONNECTED` if sim module is not connected, `Ok` if position read successfully, otherwise `UNKNOWN_ERROR`
@@ -58,7 +57,7 @@ namespace GPS_TRACKER {
         /**
          * @return `Ok` if initialization was successful
          * */
-        ISIM::STATUS_CODE init() override;
+        STATUS_CODE init() override;
 
         bool isConnected();
 

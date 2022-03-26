@@ -6,7 +6,7 @@
 #define TINY_GSM_MODEM_SIM868
 #define TINY_GSM_DEBUG Serial
 
-#define TINY_GSM_YIELD() { delay(2); }
+//#define TINY_GSM_YIELD() { delay(2); }
 
 #include "TinyGSM.h"
 #include "TinyGsmClient.h"
@@ -17,24 +17,24 @@
 #include "StreamDebugger.h"
 #include "StateManager.h"
 #include <mutex>
-#include <SoftwareSerial.h>
 
 namespace GPS_TRACKER {
+    using namespace MODEM;
     /**
      * Class for interacting with SIM868 module.
      * Call init() method before you start calling others.
      *
      * WIRING: sim module must be connected with ESP32 via Serial2.
      * */
-    class SIM868 : MODEM::ISIM {
+    class SIM868 : ISIM {
     public:
         SIM868();
 
         explicit SIM868(GPS_TRACKER::Configuration &config) : configuration(config) {};
 
-        ISIM::STATUS_CODE sendData(JsonDocument *data) override;
+        STATUS_CODE sendData(JsonDocument *data) override;
 
-        ISIM::STATUS_CODE sendData(const std::string &data);
+        STATUS_CODE sendData(const std::string &data);
 
         /**
          * @return `MODEM_NOT_CONNECTED` if sim module is not connected, `Ok` if position read successfully, otherwise `UNKNOWN_ERROR`
@@ -44,7 +44,7 @@ namespace GPS_TRACKER {
         /**
          * @return `Ok` if initialization was successful
          * */
-        ISIM::STATUS_CODE init() override;
+        STATUS_CODE init() override;
 
         bool isConnected();
 
@@ -73,7 +73,6 @@ namespace GPS_TRACKER {
 
         std::recursive_mutex gsm_mutex; // all operations with
         std::mutex mut; // all operations with
-        SoftwareSerial *simSerial = new SoftwareSerial();
         StreamDebugger *debugger = new StreamDebugger(Serial2, Serial);
         TinyGsm modem = TinyGsm(Serial2);
         TinyGsmClient gsmClient = TinyGsmClient(modem);
