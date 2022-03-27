@@ -36,7 +36,7 @@ namespace GPS_TRACKER {
 
         bool enable = false;
         int samplingRate = 1000;
-        bool fastFix = true;
+        bool fastFix = false;
         double minimal_accuracy = 0;
         int positionSampleFrequency = 1;
         int noPositionsInReport = 2;
