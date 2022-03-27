@@ -53,7 +53,11 @@ namespace GPS_TRACKER {
 
         void updatePosition(GPS_TRACKER::GPSCoordinates newPosition);
 
-        void onReachedWaypoint(std::function<void(const waypoint&)> callback);
+        void onReachedWaypoint(std::function<void(const waypoint &)> callback);
+
+        [[nodiscard]] GPS_TRACKER::Timestamp getLastFastFixFileUpdate() const;
+
+        void setLastFastFixFileUpdate(GPS_TRACKER::Timestamp lastFastFixFileUpdate);
 
     private:
         void checkCollision();
@@ -74,12 +78,13 @@ namespace GPS_TRACKER {
 
         static inline String stateFile = "/state.json";
 
+        unsigned long lastFastFixFileUpdate = 0;
         AudioPlayer::STATE audioPlayerState = AudioPlayer::STOPPED;
         MQTT::STATE mqttState = MQTT::DISCONNECTED;
         GSM::STATE gsmState = GSM::DISCONNECTED;
 
         size_t visitedWaypoints = 0;
-        std::function<void(const waypoint&)> newWaypointReachedCallback;
+        std::function<void(const waypoint &)> newWaypointReachedCallback;
         GPS_TRACKER::GPSCoordinates actPosition;
         Configuration *configuration;
     };

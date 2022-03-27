@@ -33,14 +33,6 @@ void setup() {
     }
     pinMode(0, PULLUP);
 
-
-    DefaultTasker.loopEvery("", 250, [] {
-        if (!digitalRead(0)) {
-            Serial.println("Deleting persisted state");
-            StateManager::removePersistedState();
-        }
-    });
-
     // ------ CONFIGURATION
     configuration = new Configuration();
     if (!configuration->read()) {
@@ -66,7 +58,7 @@ void setup() {
     stateManager->begin();
 
     // ------ GSM/GPS
-    sim = new SIM7000G(logger, *configuration);
+    sim = new SIM7000G(logger, *configuration, stateManager);
     STATUS_CODE initRes = sim->init();
     if (initRes != Ok) {
         logger->printf(ERROR, "Modem initialization failed> %u\n", initRes);

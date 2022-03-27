@@ -5,6 +5,8 @@
 #include "Arduino.h"
 
 namespace GPS_TRACKER {
+    typedef unsigned long Timestamp;
+
     struct Serializable {
         virtual bool serialize(std::string &buffer) const = 0;
 

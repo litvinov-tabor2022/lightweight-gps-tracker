@@ -13,6 +13,14 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
         connectToMqtt();
     }
 
+    if (configuration.GSM_CONFIG.enable) {
+        DefaultTasker.loopEvery("mqtt", 100, [this] {
+            std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+            mqttClient.loop();
+        });
+        logger->println(Logging::INFO, "Modem connected to MQTT");
+    }
+
     if (configuration.GPS_CONFIG.enable) {
         int failedConnection = 0;
         bool isGPSConnected = false;
@@ -25,14 +33,6 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
         }
         if (!isGPSConnected) return GPS_CONNECTION_ERROR;
         else logger->println(Logging::INFO, "Modem connected to GPS");
-    }
-
-    if (configuration.GSM_CONFIG.enable) {
-        DefaultTasker.loopEvery("mqtt", 100, [this] {
-            std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-            mqttClient.loop();
-        });
-        logger->println(Logging::INFO, "Modem connected to MQTT");
     }
     return Ok;
 }
@@ -220,14 +220,18 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
 bool GPS_TRACKER::SIM7000G::connectGPS() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
-    // TODO: mozna to bude potreba
     modem.sendAT("+SGPIO=0,4,1,1");
     if (modem.waitResponse(10000L) != 1) {
         DBG(" SGPIO=0,4,1,1 false ");
     }
 
-    if (configuration.GPS_CONFIG.fastFix) {
-        fastFix();
+    // update file for fast fix once for 2.5 days
+    if (configuration.GPS_CONFIG.fastFix && stateManager->getLastFastFixFileUpdate() - getActTime() >= 216000) {
+            fastFix();
+            coldStart();
+            stateManager->setLastFastFixFileUpdate(getActTime());
+    } else {
+        warmStart();
     }
 
     if (!modem.enableGPS()) {
@@ -307,11 +311,11 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
     return true;
 }
 
-// FIXME: hardcoded APN
 void GPS_TRACKER::SIM7000G::fastFix() {
     modem.sendAT(GF("+CGNSMOD=1,1,1,1"));
     modem.waitResponse();
-    modem.sendAT(GF("+SAPBR=3,1, \"APN\",\"internet.t-mobile.cz\""));
+    std::string cmd = "+SAPBR=3,1, \"APN\",\"" + configuration.GSM_CONFIG.apn + "\"";
+    modem.sendAT(GF(cmd.c_str()));
     modem.waitResponse();
     modem.sendAT(GF("+SAPBR=1,1"));
     modem.waitResponse();
@@ -331,6 +335,35 @@ void GPS_TRACKER::SIM7000G::fastFix() {
     modem.waitResponse();
     modem.sendAT(GF("+CGNSXTRA=1"));
     modem.waitResponse();
+}
+
+void GPS_TRACKER::SIM7000G::hotStart() {
+    modem.sendAT(GF("+CGNSHOT"));
+    modem.waitResponse();
+}
+
+void GPS_TRACKER::SIM7000G::warmStart() {
+    modem.sendAT(GF("+CGNSWARM"));
+    modem.waitResponse();
+}
+
+void GPS_TRACKER::SIM7000G::coldStart() {
     modem.sendAT(GF("+CGNSCOLD"));
-    modem.waitResponse(5000L, GF("+CGNSXTRA: 0"));
+    modem.waitResponse(5000L, GF("+CGNSXTRA: 0"), GF("+CGNSXTRA: 2"));
+}
+
+void GPS_TRACKER::SIM7000G::setGPSAccuracy(int meters = 50) {
+    String cmd = "+CGNSHOR=" + (String) meters;
+    modem.sendAT(GF(cmd));
+    modem.waitResponse();
+}
+
+GPS_TRACKER::Timestamp GPS_TRACKER::SIM7000G::getActTime() {
+    float timezone;
+    tm rawTime = {};
+    modem.getNetworkTime(&rawTime.tm_year, &rawTime.tm_mon, &rawTime.tm_mday, &rawTime.tm_hour, &rawTime.tm_min,
+                         &rawTime.tm_sec, &timezone);
+    rawTime.tm_year -= 1900;
+    rawTime.tm_mon -= 1;
+    return mktime(&rawTime);
 }
