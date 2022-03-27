@@ -34,16 +34,16 @@ namespace GPS_TRACKER {
 #define SD_CS       13
 #define LED_PIN     12
 
-    class SIM7000G : ISIM {
-/**
-     * Class for interacting with SIM868 module.
+    /**
+     * Class for interacting with SIM7000G module.
      * Call init() method before you start calling others.
-     *
-     * WIRING: sim module must be connected with ESP32 via Serial2.
      * */
+    class SIM7000G : ISIM {
     public:
-        explicit SIM7000G(Logging::Logger *logger, GPS_TRACKER::Configuration &config) : logger(logger),
-                                                                                         configuration(config) {};
+        explicit SIM7000G(Logging::Logger *logger, GPS_TRACKER::Configuration &config,
+                          GPS_TRACKER::StateManager *stateManager) : logger(logger),
+                                                                     configuration(config),
+                                                                     stateManager(stateManager) {};
 
         STATUS_CODE sendData(JsonDocument *data) override;
 
@@ -65,14 +65,22 @@ namespace GPS_TRACKER {
 
         bool isMqttConnected();
 
+        Timestamp getActTime();
+
     private:
         /**
          * This is blocking function! It blocks thread until the network connection is established.
          * */
         bool connectGPRS();
 
+        /**
+         * This is blocking function! It blocks thread until the GSP position is fixed.
+         * */
         bool connectGPS();
 
+        /**
+         * This is blocking function! It blocks thread until the connection with MQTT broker is established.
+         * */
         bool connectToMqtt();
 
         bool reconnect();
@@ -82,7 +90,21 @@ namespace GPS_TRACKER {
             return modem.isNetworkConnected() && modem.isGprsConnected();
         }
 
+        /**
+         * Downloads XTRA file. Call this once ever every three days.
+         * */
         void fastFix();
+
+        void setGPSAccuracy(int meters);
+
+        void hotStart();
+
+        void warmStart();
+
+        /**
+         * Call this after the XTRA file is updated.
+         * */
+        void coldStart();
 
         Logging::Logger *logger;
         std::recursive_mutex gsm_mutex; // all operations with
@@ -93,6 +115,7 @@ namespace GPS_TRACKER {
         SSLClient gsmClientSSL = SSLClient(&gsmClient);
         PubSubClient mqttClient = PubSubClient(gsmClientSSL);
         GPS_TRACKER::Configuration configuration;
+        GPS_TRACKER::StateManager *stateManager;
     };
 }
 

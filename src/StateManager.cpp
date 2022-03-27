@@ -1,8 +1,7 @@
 #include "StateManager.h"
 
 GPS_TRACKER::StateManager::StateManager(GPS_TRACKER::Configuration *configuration) :
-        configuration(configuration) {
-}
+        configuration(configuration) {}
 
 void GPS_TRACKER::StateManager::begin() {
     loadPersistState();
@@ -28,10 +27,12 @@ void GPS_TRACKER::StateManager::clearMemory() {
 
 void GPS_TRACKER::StateManager::serialize(JsonDocument *doc) const {
     (*doc)["visited-waypoints"] = visitedWaypoints;
+    (*doc)["last-fast-fix-file-update"] = lastFastFixFileUpdate;
 }
 
 void GPS_TRACKER::StateManager::deserialize(JsonDocument &doc) {
     visitedWaypoints = doc["visited-waypoints"];
+    lastFastFixFileUpdate = doc["last-fast-fix-file-update"];
 }
 
 void GPS_TRACKER::StateManager::persistState() {
@@ -108,4 +109,13 @@ void GPS_TRACKER::StateManager::removePersistedState() {
 void GPS_TRACKER::StateManager::updatePosition(GPS_TRACKER::GPSCoordinates newPosition) {
     actPosition = std::move(newPosition);
     checkCollision();
+}
+
+GPS_TRACKER::Timestamp GPS_TRACKER::StateManager::getLastFastFixFileUpdate() const {
+    return lastFastFixFileUpdate;
+}
+
+void GPS_TRACKER::StateManager::setLastFastFixFileUpdate(GPS_TRACKER::Timestamp lastUpdate) {
+    StateManager::lastFastFixFileUpdate = lastUpdate;
+    persistState();
 }
