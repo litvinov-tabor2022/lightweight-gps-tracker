@@ -43,6 +43,7 @@ namespace AudioPlayer {
          * */
         bool setVolume(int newVolume);
 
+        bool playing();
     private:
 
         void playNext();

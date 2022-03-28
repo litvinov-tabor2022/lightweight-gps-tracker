@@ -14,6 +14,7 @@ namespace MODEM {
         MODEM_NOT_CONNECTED,
         GPS_ACCURACY_TOO_LOW,
         GPS_COORDINATES_OUT_OF_RANGE,
+        SERIALIZATION_ERROR,
         UNKNOWN_ERROR
     };
 

@@ -91,20 +91,24 @@ namespace GPS_TRACKER {
     struct config {
         config() = default;
 
-        config(long trackerId, std::string token, double accuracy) : trackerId(trackerId), accuracy(accuracy),
-                                                                     token(std::move(token)) {}
+        config(long trackerId, std::string token, double accuracy, long sleepTime) : trackerId(trackerId),
+                                                                                     accuracy(accuracy),
+                                                                                     token(std::move(token)),
+                                                                                     sleepTime(sleepTime) {}
 
         static config build(JsonVariant &c) {
             return config(
                     c["tracker-id"].as<long>(),
                     c["token"].as<std::string>(),
-                    c["accuracy"].as<double>()
+                    c["accuracy"].as<double>(),
+                    c["sleep-time"].as<long>()
             );
         }
 
         long trackerId = -1;
         double accuracy = 100;
         std::string token;
+        long sleepTime = 0; // in seconds
     };
 
     struct waypoint {
@@ -125,7 +129,6 @@ namespace GPS_TRACKER {
          * This functions is accessing configuration file on external storage.
          * */
         bool read() {
-//            Serial.println("Reading configuration...");
             DynamicJsonDocument doc(2048);
 
             // read config from filesystem
@@ -166,8 +169,6 @@ namespace GPS_TRACKER {
         config CONFIG;
         waypoints WAYPOINTS;
     };
-
-//    extern Configuration configuration;
 }
 
 #endif //LIGHTWEIGHT_GPS_TRACKER_CONFIGURATION_H
