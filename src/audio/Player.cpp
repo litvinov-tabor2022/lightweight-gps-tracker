@@ -91,6 +91,6 @@ void AudioPlayer::Player::stop() {
     this->audioOutput->stop();
 }
 
-bool AudioPlayer::Player::playing() {
+bool AudioPlayer::Player::playing() const {
     return this->isPlaying;
 }

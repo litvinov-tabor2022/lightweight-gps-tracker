@@ -33,6 +33,9 @@ namespace GPS_TRACKER {
 #define SD_SCLK     14
 #define SD_CS       13
 #define LED_PIN     12
+#define PIN_ADC_BAT 35
+#define PIN_ADC_SOLAR 36
+#define ADC_BATTERY_LEVEL_SAMPLES 100
 
     /**
      * Class for interacting with SIM7000G module.
@@ -76,6 +79,10 @@ namespace GPS_TRACKER {
         void powerOff();
 
     private:
+        static double battery();
+
+        double batteryPercentage() const;
+
         /**
          * This is blocking function! It blocks thread until the network connection is established.
          * */
@@ -124,6 +131,8 @@ namespace GPS_TRACKER {
         PubSubClient mqttClient = PubSubClient(gsmClientSSL);
         GPS_TRACKER::Configuration configuration;
         GPS_TRACKER::StateManager *stateManager;
+        double batteryFullyChargedLimit = 4200;
+        double batteryDischargeVoltage = 2700;
     };
 }
 
