@@ -3,10 +3,14 @@
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
 
     // POWER ON GSM MODULE
-    pinMode(PWR_PIN, OUTPUT);
-    digitalWrite(PWR_PIN, HIGH);
-    delay(300);
-    digitalWrite(PWR_PIN, LOW);
+    if (stateManager->getWakeupReason() == ESP_SLEEP_WAKEUP_TIMER) {
+        wakeUp();
+    } else {
+        pinMode(PWR_PIN, OUTPUT);
+        digitalWrite(PWR_PIN, HIGH);
+        delay(300);
+        digitalWrite(PWR_PIN, LOW);
+    }
 
     if (configuration.GSM_CONFIG.enable) {
         if (!connectGPRS()) return GSM_CONNECTION_ERROR;
@@ -40,7 +44,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(const std::string &data) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
-    logger->printf(Logging::INFO, "Sending data... %d\n", mqttClient.state());
+    logger->println(Logging::INFO, "Start sending routine...");
     if (!mqttClient.connected()) {
         logger->printf(Logging::ERROR, "MQTT client error: %d\n", mqttClient.state());
         logger->println(Logging::INFO, "Trying to reconnect ...");
@@ -116,16 +120,14 @@ bool GPS_TRACKER::SIM7000G::isConnected() {
 bool GPS_TRACKER::SIM7000G::connectGPRS() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
-//    TinyGsmAutoBaud(SerialAT, 9600, 115200);
     SerialAT.begin(UART_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
 
-    // TODO: is this needed
-    if (!modem.restart()) {
-        logger->println(Logging::ERROR, "Failed to restart modem, attempting to continue without restarting");
-        return false;
+    if (stateManager->getWakeupReason() != ESP_SLEEP_WAKEUP_TIMER) {
+        if (!modem.restart()) {
+            logger->println(Logging::ERROR, "Failed to restart modem.");
+            return false;
+        }
     }
-
-    modem.sleepEnable(false);
 
     logger->printf(Logging::INFO, "Modem: %s\n", modem.getModemInfo().c_str());
 
@@ -156,14 +158,13 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
     bool modemConnectedSuccessfully = false;
 
     while (!modemConnectedSuccessfully) {
-//        Tasker::sleep(1000);
         logger->println(Logging::INFO, "Waiting for network...");
         if (!modem.waitForNetwork()) {
             logger->println(Logging::ERROR, " failed!");
             continue;
         }
 
-        logger->printf(Logging::INFO, "Connecting to %s", configuration.GSM_CONFIG.apn.c_str());
+        logger->printf(Logging::INFO, "Connecting to %s\n", configuration.GSM_CONFIG.apn.c_str());
         if (!modem.gprsConnect(configuration.GSM_CONFIG.apn.c_str(),
                                configuration.GSM_CONFIG.user.c_str(),
                                configuration.GSM_CONFIG.password.c_str())) {
@@ -173,7 +174,6 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
         logger->println(Logging::INFO, " succeed!");
         modemConnectedSuccessfully = true;
     }
-//    stateManager->setGsmState(GSM::CONNECTED);
     return true;
 }
 
@@ -183,32 +183,37 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
     logger->println(Logging::INFO, "Connecting to MQTT....");
     mqttClient.setServer(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
 
-    //    mqttClient.setKeepAlive((REPORT_FREQUENCE * 2) / 1000);
+    mqttClient.setKeepAlive(40);
     int errorAttempts = 0;
+    bool cleanSession = true;
+
+    if(stateManager->getWakeupReason() == ESP_SLEEP_WAKEUP_TIMER){
+        cleanSession = false;
+    }
 
     // Loop until we're reconnected
     while (!mqttClient.connected()) {
         Tasker::yield();
         // Create a random client ID
         String clientId = "TRACKER-";
-        clientId += String(random(0xffff), HEX);
+        clientId += configuration.CONFIG.trackerId;
         // Attempt to connect
         logger->printf(Logging::INFO, "Attempting MQTT connection... host: %s, username: %s, password: %s\n",
                        configuration.MQTT_CONFIG.host.c_str(),
                        configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
-        mqttClient.disconnect();
         if (mqttClient.connect(clientId.c_str(),
                                configuration.MQTT_CONFIG.username.c_str(),
-                               configuration.MQTT_CONFIG.password.c_str())) {
-//            stateManager->setMqttState(MQTT::CONNECTED);
+                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 0, false, "off", cleanSession)) {
             logger->printf(Logging::INFO, " connected to %s, topic: %s, username: %s, password: %s\n",
                            configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.topic.c_str(),
                            configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
         } else {
-//            stateManager->setMqttState(MQTT::DISCONNECTED);
-            logger->printf(Logging::ERROR, "failed, rc=%d try again in 5 seconds\n", mqttClient.state());
+            logger->printf(Logging::ERROR, "failed, rc=%d try again in 5 seconds, attempt no. %d\n", mqttClient.state(), errorAttempts);
             errorAttempts++;
-            if (errorAttempts > 5) logger->println(Logging::ERROR, "MQTT connection error.");
+            if (errorAttempts > 5) {
+                logger->println(Logging::ERROR, "MQTT connection error.");
+                return false;
+            }
             // Wait 5 seconds before retrying
             Tasker::sleep(5000);
         }
@@ -225,17 +230,19 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
         DBG(" SGPIO=0,4,1,1 false ");
     }
 
-    // update file for fast fix once for 2.5 days
-    if (configuration.GPS_CONFIG.fastFix && stateManager->getLastFastFixFileUpdate() - getActTime() >= 216000) {
-            fastFix();
-            coldStart();
-            stateManager->setLastFastFixFileUpdate(getActTime());
-    } else {
-        warmStart();
-    }
-
     if (!modem.enableGPS()) {
         logger->println(Logging::INFO, "Enabling GPS failed");
+        return false;
+    }
+
+    // update file for fast fix once for 2.5 days
+    if (configuration.GPS_CONFIG.fastFix && stateManager->getLastFastFixFileUpdate() - getActTime() >= 216000) {
+        fastFix();
+        coldStart();
+        stateManager->setLastFastFixFileUpdate(getActTime());
+    } else {
+        logger->println(Logging::INFO, "Skipping downloading of XTRA file");
+        hotStart();
     }
 
     float lat, lon, speed, alt, accuracy;
@@ -243,8 +250,8 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     logger->println(Logging::INFO, "Waiting for GPS");
     while (!modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy)) {
         if (this->isConnected()) {
-            logger->println(Logging::INFO, modem.getGPSraw());
-            logger->printf(Logging::INFO, "vsat: %d, usat: %d\n", vsat, usat);
+            logger->println(Logging::DEBUG, modem.getGPSraw());
+            logger->printf(Logging::DEBUG, "vsat: %d, usat: %d\n", vsat, usat);
             Tasker::sleep(1500);
         } else {
             return false;
@@ -278,14 +285,16 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
     logger->println(Logging::INFO, "Reconnecting");
     int reconnectAttempts = 0;
     while (!isConnected() || !isMqttConnected() || !isGpsConnected()) {
+        wakeUp();
         if (reconnectAttempts > 5) {
-//            esp_restart(); // TODO skipp if playing music
+            esp_restart(); // TODO skipp if playing music
 //            return false;
         }
         if (!isModemConnected()) {
             logger->println(Logging::INFO, "Reconnecting GPRS modem");
             if (!connectGPRS()) {
                 reconnectAttempts++;
+                continue;
             }
         } else {
             logger->println(Logging::INFO, "GSM modem connected");
@@ -294,6 +303,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
             logger->println(Logging::INFO, "Reconnecting GPS");
             if (!connectGPS()) {
                 reconnectAttempts++;
+                continue;
             }
         } else {
             Serial.println("GPS modem connected");
@@ -302,6 +312,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
             logger->println(Logging::INFO, "Reconnecting MQTT client");
             if (!connectToMqtt()) {
                 reconnectAttempts++;
+                continue;
             }
         } else {
             logger->println(Logging::INFO, "MQTT modem connected");
@@ -338,16 +349,19 @@ void GPS_TRACKER::SIM7000G::fastFix() {
 }
 
 void GPS_TRACKER::SIM7000G::hotStart() {
+    logger->println(Logging::INFO, "GPS hot start");
     modem.sendAT(GF("+CGNSHOT"));
     modem.waitResponse();
 }
 
 void GPS_TRACKER::SIM7000G::warmStart() {
+    logger->println(Logging::INFO, "GPS warm start");
     modem.sendAT(GF("+CGNSWARM"));
     modem.waitResponse();
 }
 
 void GPS_TRACKER::SIM7000G::coldStart() {
+    logger->println(Logging::INFO, "GPS cold start");
     modem.sendAT(GF("+CGNSCOLD"));
     modem.waitResponse(5000L, GF("+CGNSXTRA: 0"), GF("+CGNSXTRA: 2"));
 }
@@ -366,4 +380,41 @@ GPS_TRACKER::Timestamp GPS_TRACKER::SIM7000G::getActTime() {
     rawTime.tm_year -= 1900;
     rawTime.tm_mon -= 1;
     return mktime(&rawTime);
+}
+
+void GPS_TRACKER::SIM7000G::sleep() {
+    modem.sleepEnable(true);
+    pinMode(PIN_DTR, OUTPUT);
+    digitalWrite(PIN_DTR, HIGH);
+    delay(80);
+}
+
+void GPS_TRACKER::SIM7000G::wakeUp() {
+    pinMode(PIN_DTR, OUTPUT);
+    digitalWrite(PIN_DTR, LOW);
+    delay(80);
+    modem.sleepEnable(false);
+}
+
+MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendActPosition() {
+    GPSCoordinates coordinates;
+    STATUS_CODE actPositionState = actualPosition(&coordinates);
+    if (Ok != actPositionState) {
+        logger->printf(Logging::WARNING, "Position is not valid, skipping: %d\n", actPositionState);
+        return actPositionState;
+    }
+    stateManager->updatePosition(coordinates);
+    Message message(configuration.CONFIG.trackerId, stateManager->getVisitedWaypoints(), coordinates);
+    std::string serializeMessage;
+    if (!message.serialize(serializeMessage)) {
+        logger->println(Logging::ERROR, "Message serialization error");
+        return SERIALIZATION_ERROR;
+    }
+    logger->printf(Logging::INFO, "Message: %s\n", serializeMessage.c_str());
+
+    return sendData(serializeMessage);
+}
+
+void GPS_TRACKER::SIM7000G::powerOff() {
+    modem.poweroff();
 }

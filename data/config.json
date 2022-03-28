@@ -1,7 +1,8 @@
 {
   "general": {
     "tracker-id": 123,
-    "accuracy": 100
+    "accuracy": 50,
+    "sleep-time": 25
   },
   "mqtt": {
     "host": "mqtt.dev.jenda.eu",
@@ -19,14 +20,38 @@
   "gps": {
     "enable": true,
     "fast-fix": true,
-    "sampling-rate": 1000,
+    "sampling-rate": 300000,
     "minimal-accuracy": 5
   },
   "waypoints": [
     {
       "id": 1,
-      "lat": 50.1268959,
-      "lon": 14.42045593,
+      "lat": 50.0770561,
+      "lon": 14.5058111,
+      "path": "/moses.mp3"
+    },
+    {
+      "id": 2,
+      "lat": 50.0759492,
+      "lon": 14.5017797,
+      "path": "/moses.mp3"
+    },
+    {
+      "id": 3,
+      "lat": 50.0745119,
+      "lon": 14.4995831,
+      "path": "/moses.mp3"
+    },
+    {
+      "id": 4,
+      "lat": 50.0748286,
+      "lon": 14.5049636,
+      "path": "/moses.mp3"
+    },
+    {
+      "id": 5,
+      "lat": 50.0770765,
+      "lon": 14.5058111,
       "path": "/moses.mp3"
     }
   ]

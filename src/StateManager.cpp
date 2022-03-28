@@ -5,6 +5,7 @@ GPS_TRACKER::StateManager::StateManager(GPS_TRACKER::Configuration *configuratio
 
 void GPS_TRACKER::StateManager::begin() {
     loadPersistState();
+    wakeup_reason = esp_sleep_get_wakeup_cause();
 }
 
 void GPS_TRACKER::StateManager::loadPersistState() {
@@ -78,6 +79,9 @@ void GPS_TRACKER::StateManager::checkCollision() {
 }
 
 double GPS_TRACKER::StateManager::distanceToNextWaypoint() {
+    if(visitedWaypoints == configuration->WAYPOINTS.size()){
+        return std::numeric_limits<double>::max();
+    }
     auto distanceFromNextWaypointInKm =
             6378.388 *
             acos(sin(deg2rad(actPosition.lat)) * sin(deg2rad(configuration->WAYPOINTS[visitedWaypoints].lat)) +
@@ -118,4 +122,8 @@ GPS_TRACKER::Timestamp GPS_TRACKER::StateManager::getLastFastFixFileUpdate() con
 void GPS_TRACKER::StateManager::setLastFastFixFileUpdate(GPS_TRACKER::Timestamp lastUpdate) {
     StateManager::lastFastFixFileUpdate = lastUpdate;
     persistState();
+}
+
+esp_sleep_wakeup_cause_t GPS_TRACKER::StateManager::getWakeupReason() const {
+    return wakeup_reason;
 }
