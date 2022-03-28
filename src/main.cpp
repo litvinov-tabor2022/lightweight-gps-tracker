@@ -18,6 +18,7 @@ AudioPlayer::Player *audioPlayer;
 AudioOutputI2S out;
 AudioGeneratorMP3 mp3;
 AudioFileSourceSPIFFS source;
+bool shouldSleep = false;
 
 void setup() {
     Serial.begin(115200);
@@ -60,8 +61,10 @@ void setup() {
     }
 
     // ------ AUDIO
+    out.SetPinout(22, 21, 23);
     audioPlayer = new AudioPlayer::Player(logger, &mp3, &out, &source, (DEFAULT_VOLUME / 100.0));
     audioPlayer->setVolume(DEFAULT_VOLUME);
+    audioPlayer->enqueueFile("/moses.mp3");
     audioPlayer->play();
 
     stateManager->onReachedWaypoint([](const waypoint &w) {
@@ -72,32 +75,34 @@ void setup() {
     });
 
     esp_sleep_enable_timer_wakeup(configuration->CONFIG.sleepTime * uS_TO_S_FACTOR);
+
+    DefaultTasker.loopEvery("loop", 500, [] {
+        STATUS_CODE res = sim->sendActPosition();
+        switch (res) {
+            case Ok:
+                if (stateManager->distanceToNextWaypoint() > 150) { // don't sleep if the waypoint is close
+                    shouldSleep = true;
+                }
+                break;
+            case GPS_CONNECTION_ERROR: // fatal error
+                while (!audioPlayer->playing()) {
+                    Tasker::sleep(100);
+                }
+                esp_restart();
+            default:
+                // noop
+                break;
+        }
+
+        if (!audioPlayer->playing() && shouldSleep) {
+//        sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
+            logger->println(INFO, "Going to sleep");
+            logger->flush();
+            Tasker::sleep(50);
+            esp_deep_sleep_start();
+        }
+    });
 }
 
-bool shouldSleep = false;
-
 void loop() {
-    STATUS_CODE res = sim->sendActPosition();
-    switch (res) {
-        case Ok:
-            if (stateManager->distanceToNextWaypoint() < 150) { // don't sleep if the waypoint is close
-                delay(500);
-            } else {
-                shouldSleep = true;
-            }
-            break;
-        case GPS_CONNECTION_ERROR: // fatal error
-            esp_restart();
-        default:
-            delay(10);
-            break;
-    }
-
-    if (!audioPlayer->playing() && shouldSleep) {
-//        sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
-        logger->println(INFO, "Going to sleep");
-        logger->flush();
-        delay(50);
-        esp_deep_sleep_start();
-    }
 }

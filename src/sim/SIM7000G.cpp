@@ -187,7 +187,7 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
     int errorAttempts = 0;
     bool cleanSession = true;
 
-    if(stateManager->getWakeupReason() == ESP_SLEEP_WAKEUP_TIMER){
+    if (stateManager->getWakeupReason() == ESP_SLEEP_WAKEUP_TIMER) {
         cleanSession = false;
     }
 
@@ -203,12 +203,14 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
                        configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
         if (mqttClient.connect(clientId.c_str(),
                                configuration.MQTT_CONFIG.username.c_str(),
-                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 0, false, "off", cleanSession)) {
+                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 0, false, "off",
+                               cleanSession)) {
             logger->printf(Logging::INFO, " connected to %s, topic: %s, username: %s, password: %s\n",
                            configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.topic.c_str(),
                            configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
         } else {
-            logger->printf(Logging::ERROR, "failed, rc=%d try again in 5 seconds, attempt no. %d\n", mqttClient.state(), errorAttempts);
+            logger->printf(Logging::ERROR, "failed, rc=%d try again in 5 seconds, attempt no. %d\n", mqttClient.state(),
+                           errorAttempts);
             errorAttempts++;
             if (errorAttempts > 5) {
                 logger->println(Logging::ERROR, "MQTT connection error.");
@@ -404,7 +406,8 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendActPosition() {
         return actPositionState;
     }
     stateManager->updatePosition(coordinates);
-    Message message(configuration.CONFIG.trackerId, stateManager->getVisitedWaypoints(), coordinates);
+    Message message(configuration.CONFIG.trackerId, stateManager->getVisitedWaypoints(), coordinates,
+                    batteryPercentage());
     std::string serializeMessage;
     if (!message.serialize(serializeMessage)) {
         logger->println(Logging::ERROR, "Message serialization error");
@@ -417,4 +420,24 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendActPosition() {
 
 void GPS_TRACKER::SIM7000G::powerOff() {
     modem.poweroff();
+}
+
+
+double GPS_TRACKER::SIM7000G::battery() {
+    pinMode(PIN_ADC_BAT, INPUT);
+    uint32_t in = 0;
+    for (int i = 0; i < ADC_BATTERY_LEVEL_SAMPLES; i++) {
+        in += (uint32_t) analogRead(PIN_ADC_BAT);
+    }
+    in = (int) in / ADC_BATTERY_LEVEL_SAMPLES;
+
+    double bat_mv = ((float) in / 4096) * 3600 * 2;
+
+    return bat_mv;
+}
+
+double GPS_TRACKER::SIM7000G::batteryPercentage() const {
+    double tmp = battery() - batteryDischargeVoltage;
+    double per = (100 / (batteryFullyChargedLimit - batteryDischargeVoltage)) * tmp;
+    return per > 0 ? per : 0;
 }
