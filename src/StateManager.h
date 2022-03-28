@@ -59,10 +59,12 @@ namespace GPS_TRACKER {
 
         void setLastFastFixFileUpdate(GPS_TRACKER::Timestamp lastFastFixFileUpdate);
 
-    private:
-        void checkCollision();
+        esp_sleep_wakeup_cause_t getWakeupReason() const;
 
         double distanceToNextWaypoint();
+
+    private:
+        void checkCollision();
 
         static double deg2rad(float deg);
 
@@ -87,6 +89,7 @@ namespace GPS_TRACKER {
         std::function<void(const waypoint &)> newWaypointReachedCallback;
         GPS_TRACKER::GPSCoordinates actPosition;
         Configuration *configuration;
+        esp_sleep_wakeup_cause_t wakeup_reason;
     };
 }
 

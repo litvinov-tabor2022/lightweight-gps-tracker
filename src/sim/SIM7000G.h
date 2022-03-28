@@ -22,7 +22,7 @@ namespace GPS_TRACKER {
     using namespace MODEM;
 
 #define SerialAT    Serial1
-#define UART_BAUD   9600
+#define UART_BAUD   115200
 #define PIN_DTR     25
 #define PIN_TX      27
 #define PIN_RX      26
@@ -38,7 +38,7 @@ namespace GPS_TRACKER {
      * Class for interacting with SIM7000G module.
      * Call init() method before you start calling others.
      * */
-    class SIM7000G : ISIM {
+    class SIM7000G : public ISIM {
     public:
         explicit SIM7000G(Logging::Logger *logger, GPS_TRACKER::Configuration &config,
                           GPS_TRACKER::StateManager *stateManager) : logger(logger),
@@ -65,7 +65,15 @@ namespace GPS_TRACKER {
 
         bool isMqttConnected();
 
+        MODEM::STATUS_CODE sendActPosition();
+
         Timestamp getActTime();
+
+        void sleep();
+
+        void wakeUp();
+
+        void powerOff();
 
     private:
         /**

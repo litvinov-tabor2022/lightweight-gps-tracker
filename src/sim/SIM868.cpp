@@ -35,7 +35,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM868::init() {
 MODEM::STATUS_CODE GPS_TRACKER::SIM868::sendData(const std::string &data) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
 
-    Serial.printf("Sending data... %d\n", mqttClient.state());
+    Serial.printf("Sending data\n");
     if (!mqttClient.connected()) {
         Serial.printf("MQTT client error: %d\n", mqttClient.state());
         Serial.println("Trying to reconnect ...");
@@ -43,7 +43,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM868::sendData(const std::string &data) {
     }
 
     bool published = mqttClient.publish(configuration.MQTT_CONFIG.topic.c_str(), data.c_str());
-    Serial.printf("Publish %d chars to MQTT topic %s end with result: %d\n", data.length(),
+    Serial.printf("Publish %d chars to MQTT topic %s end with result [1 - success, 0 - fail]: %d\n", data.length(),
                   configuration.MQTT_CONFIG.topic.c_str(), published);
 
     if (published) {

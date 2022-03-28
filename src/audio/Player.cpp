@@ -26,15 +26,13 @@ void AudioPlayer::Player::play() {
         if (!audioGenerator->loop()) {
             audioGenerator->stop();
             playingUninterruptible = false;
+            isPlaying = false;
         }
         if (!audioGenerator->isRunning()) {
             audioGenerator->stop();
             audioGenerator->desync();
             playingUninterruptible = false;
-            if (isPlaying) {
-                esp_restart();
-            }
-            playNext();
+            isPlaying = false;
             playNext();
         }
     });
@@ -67,7 +65,10 @@ void AudioPlayer::Player::enqueueFile(const std::string &path, bool uninterrupti
 void AudioPlayer::Player::playNext() {
     std::lock_guard<std::mutex> lock(queueMutex);
 
-    if (fileQueue.empty()) return;
+    if (fileQueue.empty()) {
+        isPlaying = false;
+        return;
+    }
     logger->printf(Logging::INFO, "Playing next file: %s\n", fileQueue.front().path.c_str());
     selectFile(fileQueue.front());
     fileQueue.pop();
@@ -88,4 +89,8 @@ void AudioPlayer::Player::stop() {
     this->audioGenerator->desync();
     this->audioGenerator->stop();
     this->audioOutput->stop();
+}
+
+bool AudioPlayer::Player::playing() {
+    return this->isPlaying;
 }
