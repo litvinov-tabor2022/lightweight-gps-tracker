@@ -43,10 +43,10 @@ namespace GPS_TRACKER {
     };
 
     struct Message : Serializable {
-        Message(long trackerId, size_t visitedWaypoints, GPSCoordinates coordinates) :
+        Message(long trackerId, size_t visitedWaypoints, GPSCoordinates coordinates, double battery = -1) :
                 trackerId(trackerId),
                 visitedWaypoints(visitedWaypoints),
-                coordinates(std::move(coordinates)) {}
+                coordinates(std::move(coordinates)), battery(battery) {}
 
         bool serialize(std::string &buffer) const override {
             std::string dbg;
@@ -60,6 +60,7 @@ namespace GPS_TRACKER {
             doc["tracker_id"] = this->trackerId;
             doc["timestamp"] = coordinates.timestamp;
             doc["visited_waypoints"] = this->visitedWaypoints;
+            doc["battery"] = this->battery;
             JsonObject coords = doc.createNestedObject("coordinates");
             coords.set(coordinates.toJson().as<JsonObject>());
             return doc.as<JsonVariant>();
@@ -68,6 +69,7 @@ namespace GPS_TRACKER {
         long trackerId;
         size_t visitedWaypoints;
         GPS_TRACKER::GPSCoordinates coordinates;
+        double battery;
     };
 }
 
