@@ -47,7 +47,10 @@ void setup() {
 //    Serial.println(myIP);
 
 // and change logger to Logger::serialAndTelnetLogger(...)
-    logger = Logger::serialLogger(DEBUG);
+    SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
+    SD.begin(SD_CS);
+    File loggerFile = SD.open("/tracker.log");
+    logger = Logger::fileLogger(&loggerFile, DEBUG);
 
     // ------ STATE
     stateManager = new StateManager(configuration);
@@ -97,7 +100,7 @@ void setup() {
         if (!audioPlayer->playing() && shouldSleep) {
 //        sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
             logger->println(INFO, "Going to sleep");
-            logger->flush();
+//            logger->flush();
             Tasker::sleep(50);
             esp_deep_sleep_start();
         }
