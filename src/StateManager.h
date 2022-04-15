@@ -59,7 +59,7 @@ namespace GPS_TRACKER {
 
         void setLastFastFixFileUpdate(GPS_TRACKER::Timestamp lastFastFixFileUpdate);
 
-        esp_sleep_wakeup_cause_t getWakeupReason() const;
+        [[nodiscard]] esp_sleep_wakeup_cause_t getWakeupReason() const;
 
         double distanceToNextWaypoint();
 

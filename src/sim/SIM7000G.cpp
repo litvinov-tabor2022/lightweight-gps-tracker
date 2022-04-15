@@ -1,9 +1,11 @@
 #include "SIM7000G.h"
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
+    logger->println(Logging::INFO, "Initializing SIM700G module...");
 
     // POWER ON GSM MODULE
     if (stateManager->getWakeupReason() == ESP_SLEEP_WAKEUP_TIMER) {
+        logger->println(Logging::INFO, "Waking up SIM7000G");
         wakeUp();
     } else {
         pinMode(PWR_PIN, OUTPUT);
@@ -13,11 +15,13 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     }
 
     if (configuration.GSM_CONFIG.enable) {
+        logger->println(Logging::INFO, "Connecting to GSM");
         if (!connectGPRS()) return GSM_CONNECTION_ERROR;
         connectToMqtt();
     }
 
     if (configuration.GSM_CONFIG.enable) {
+        logger->println(Logging::INFO, "Starting MQTT routine");
         DefaultTasker.loopEvery("mqtt", 100, [this] {
             std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
             mqttClient.loop();
@@ -26,6 +30,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     }
 
     if (configuration.GPS_CONFIG.enable) {
+        logger->println(Logging::INFO, "Enabling GPS (waiting for first fix)");
         int failedConnection = 0;
         bool isGPSConnected = false;
         while (failedConnection < 4) {
@@ -436,7 +441,8 @@ double GPS_TRACKER::SIM7000G::battery() {
     return bat_mv;
 }
 
-double GPS_TRACKER::SIM7000G::batteryPercentage() const {
+double GPS_TRACKER::SIM7000G::batteryPercentage() {
+    return battery();
     double tmp = battery() - batteryDischargeVoltage;
     double per = (100 / (batteryFullyChargedLimit - batteryDischargeVoltage)) * tmp;
     return per > 0 ? per : 0;

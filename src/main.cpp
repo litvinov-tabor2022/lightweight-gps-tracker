@@ -97,7 +97,7 @@ void setup() {
         if (!audioPlayer->playing() && shouldSleep) {
 //        sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
             logger->println(INFO, "Going to sleep");
-            logger->flush();
+//            logger->flush();
             Tasker::sleep(50);
             esp_deep_sleep_start();
         }
