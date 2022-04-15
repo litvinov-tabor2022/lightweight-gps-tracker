@@ -52,13 +52,13 @@ namespace GPS_TRACKER {
 
         bool isMqttConnected();
 
-        MODEM::STATUS_CODE sendActPosition();
+        MODEM::STATUS_CODE sendActPosition() override;
 
         Timestamp getActTime();
 
-        void sleep();
+        MODEM::STATUS_CODE sleep() override;
 
-        void wakeUp();
+        MODEM::STATUS_CODE wakeUp() override;
 
         void powerOff();
 
