@@ -1,5 +1,7 @@
 #include "Tracker.h"
 #include <Arduino.h>
+#include <SD.h>
+#include <SPI.h>
 
 bool GPS_TRACKER::Tracker::begin() {
     initLogger();
@@ -24,7 +26,15 @@ bool GPS_TRACKER::Tracker::begin() {
 }
 
 void GPS_TRACKER::Tracker::initLogger() {
-    logger = Logging::Logger::serialLogger(Logging::DEBUG);
+    SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
+    if (SD.begin(SD_CS)) {
+        Serial.println("SD logger");
+        loggerFile = SD.open("/tracker.log", FILE_APPEND);
+        logger = Logging::Logger::fileLogger(&loggerFile, Logging::DEBUG);
+    } else {
+        Serial.println("Serial logger");
+        logger = Logging::Logger::serialLogger(Logging::DEBUG);
+    }
     logger->println(Logging::INFO, "Logger initialized");
 }
 

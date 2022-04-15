@@ -64,6 +64,13 @@ namespace Logging {
             return new Logger{splitter, level};
         }
 
+        static Logger *fileLogger(File *file, Level level = WARNING) {
+            auto splitter = new StreamSplitter();
+            splitter->addStream(&Serial);
+            splitter->addStream(file);
+            return new Logger{splitter, level};
+        }
+
         void print(Level level, const String &string) {
             print(level, string.c_str());
         }
