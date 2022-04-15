@@ -21,22 +21,6 @@
 namespace GPS_TRACKER {
     using namespace MODEM;
 
-#define SerialAT    Serial1
-#define UART_BAUD   115200
-#define PIN_DTR     25
-#define PIN_TX      27
-#define PIN_RX      26
-#define PWR_PIN     4
-
-#define SD_MISO     2
-#define SD_MOSI     15
-#define SD_SCLK     14
-#define SD_CS       13
-#define LED_PIN     12
-#define PIN_ADC_BAT 35
-#define PIN_ADC_SOLAR 36
-#define ADC_BATTERY_LEVEL_SAMPLES 100
-
     /**
      * Class for interacting with SIM7000G module.
      * Call init() method before you start calling others.
@@ -81,7 +65,7 @@ namespace GPS_TRACKER {
     private:
         static double battery();
 
-        double batteryPercentage() const;
+        double batteryPercentage();
 
         /**
          * This is blocking function! It blocks thread until the network connection is established.
