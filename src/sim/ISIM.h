@@ -25,6 +25,12 @@ namespace MODEM {
         virtual STATUS_CODE sendData(JsonDocument *data) = 0;
 
         virtual STATUS_CODE actualPosition(GPS_TRACKER::GPSCoordinates *coordinates) = 0;
+
+        virtual STATUS_CODE sleep() = 0;
+
+        virtual STATUS_CODE wakeUp() = 0;
+
+        virtual STATUS_CODE sendActPosition() = 0;
     };
 }
 #endif //LIGHTWEIGHT_GPS_TRACKER_ISIM_H

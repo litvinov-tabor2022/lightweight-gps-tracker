@@ -389,18 +389,20 @@ GPS_TRACKER::Timestamp GPS_TRACKER::SIM7000G::getActTime() {
     return mktime(&rawTime);
 }
 
-void GPS_TRACKER::SIM7000G::sleep() {
-    modem.sleepEnable(true);
+MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sleep() {
+    bool res = modem.sleepEnable(true);
     pinMode(PIN_DTR, OUTPUT);
     digitalWrite(PIN_DTR, HIGH);
     delay(80);
+    return res ? MODEM::STATUS_CODE::Ok : MODEM::STATUS_CODE::UNKNOWN_ERROR;
 }
 
-void GPS_TRACKER::SIM7000G::wakeUp() {
+MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::wakeUp() {
     pinMode(PIN_DTR, OUTPUT);
     digitalWrite(PIN_DTR, LOW);
     delay(80);
-    modem.sleepEnable(false);
+    bool res = modem.sleepEnable(false);
+    return res ? MODEM::STATUS_CODE::Ok : MODEM::STATUS_CODE::UNKNOWN_ERROR;
 }
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendActPosition() {
