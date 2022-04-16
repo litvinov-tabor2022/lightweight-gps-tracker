@@ -79,8 +79,10 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(JsonDocument *data) {
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordinates) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
     if (!isConnected()) {
-        reconnect();
-        return MODEM_NOT_CONNECTED;
+        if(!reconnect()) {
+            logger->println(Logging::WARNING, "Modem is not connected");
+            return MODEM_NOT_CONNECTED;
+        }
     }
 
     float lat, lon, speed, alt, accuracy;
@@ -119,6 +121,8 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
 
 bool GPS_TRACKER::SIM7000G::isConnected() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    logger->printf(Logging::INFO, "is network connected: %b, is gprs connected %b\n", modem.isNetworkConnected(),
+                   modem.isGprsConnected());
     return modem.isNetworkConnected() && modem.isGprsConnected();
 }
 
@@ -129,7 +133,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
 
     if (stateManager->getWakeupReason() != ESP_SLEEP_WAKEUP_TIMER) {
         if (!modem.restart()) {
-            logger->println(Logging::ERROR, "Failed to restart modem.");
+            logger->println(Logging::WARNING, "Failed to restart modem.");
             return false;
         }
     }
