@@ -1,8 +1,6 @@
 # Lightweight GPS tracker
 
-This project contains firmware for a simple GPS tracker based on the ESP32 (core) and SIMCOM module (network communication).
-
-> :triangular_flag_on_post: Nowadays, we are working on porting a whole project to [LilyGO T-SIM7000G](https://github.com/Xinyuan-LilyGO/LilyGO-T-SIM7000G) module.
+This project contains firmware for a simple GPS tracker based on the [LilyGO T-SIM7000G](https://github.com/Xinyuan-LilyGO/LilyGO-T-SIM7000G).
 
 Firmware has two main functionalities. First is obvious from the name, the firmware allows a device to measure real-time GPS positions and send them through the internet via SIMCOM module to MQTT broker.
 Second functionality combines actual position with predefined position - waypoints. When the tracker reaches the waypoint, the music starts to play.
