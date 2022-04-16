@@ -45,9 +45,9 @@ namespace GPS_TRACKER {
         GPS_TRACKER::Configuration *configuration;
         GPS_TRACKER::StateManager *stateManager;
         AudioPlayer::Player *audioPlayer;
-        AudioOutputI2S *audioOutput;
-        AudioGeneratorMP3 *mp3;
-        AudioFileSourceSPIFFS *source;
+        AudioOutputI2S audioOutput;
+        AudioGeneratorMP3 mp3;
+        AudioFileSourceSPIFFS source;
 //    WebServer *webServer;
     };
 }

@@ -73,8 +73,7 @@ void GPS_TRACKER::Tracker::trackerLoop() {
 }
 
 void GPS_TRACKER::Tracker::registerOnReachedWaypoint() {
-    stateManager->onReachedWaypoint([this](const GPS_TRACKER::waypoint &w) {
-        // Sometimes the communication with SIM module is wierd after playing sound, so this should help.
+    stateManager->onReachedWaypoint([&](const GPS_TRACKER::waypoint &w) {
 //        sim->powerOff();
         logger->printf(Logging::INFO, "Waypoint no. %d was reached\n", w.id);
         audioPlayer->enqueueFile(w.path);
@@ -88,10 +87,9 @@ bool GPS_TRACKER::Tracker::init() {
 
 void GPS_TRACKER::Tracker::initAudio() {
 // ------ AUDIO
-    audioOutput->SetPinout(22, 21, 23);
-    audioPlayer = new AudioPlayer::Player(logger, mp3, audioOutput, source, (DEFAULT_VOLUME / 100.0));
+    audioOutput.SetPinout(22, 21, 23);
+    audioPlayer = new AudioPlayer::Player(logger, &mp3, &audioOutput, &source, (DEFAULT_VOLUME / 100.0));
     audioPlayer->setVolume(DEFAULT_VOLUME);
-//    audioPlayer->enqueueFile("/moses.mp3");
     audioPlayer->play();
 }
 
