@@ -2,6 +2,7 @@
 #define LOGGING_LOGGER_H
 
 #include "Arduino.h"
+#include "Utils.h"
 #include <TelnetStream.h>
 
 namespace {
@@ -83,7 +84,7 @@ namespace Logging {
 
         void print(Level level, const char *string) {
             if (level >= minLevel)
-                logger->printf("%s %s", levelToString(level).c_str(), string);
+                logger->printf("%s %s", levelToString(level, tag).c_str(), string);
         }
 
         void println(Level level, const String &string) {
@@ -93,7 +94,7 @@ namespace Logging {
 
         void println(Level level, const char *string) {
             if (level >= minLevel) {
-                logger->printf("%s %s\n", levelToString(level).c_str(), string);
+                logger->printf("%s %s\n", levelToString(level, tag ).c_str(), string);
                 logger->flush();
             }
         }
@@ -101,7 +102,7 @@ namespace Logging {
         template<typename T, typename... Targs>
         void printf(Level level, const char *format, T value, Targs... Fargs) {
             if (level >= minLevel) {
-                logger->print(levelToString(level) + ' ');
+                logger->print(levelToString(level, tag) + ' ');
                 rec_printf(format, value, Fargs...);
             }
         }
@@ -133,21 +134,22 @@ namespace Logging {
             logger->flush();
         }
 
-        static String levelToString(Level level) {
+        static String levelToString(Level level, const String& prefix = "") {
             switch (level) {
                 case DEBUG:
-                    return "[DBG]";
+                    return prefix + " [DBG]";
                 case INFO:
-                    return "[INFO]";
+                    return prefix + " [INFO]";
                 case WARNING:
-                    return "[WARN]";
+                    return prefix + " [WARN]";
                 case ERROR:
-                    return "[ERR]";
+                    return prefix + " [ERR]";
                 default:
-                    return "[???]";
+                    return prefix + " [???]";
             }
         }
 
+        String tag = Utils::randomString(8);
         Print *logger;
         Level minLevel;
     };

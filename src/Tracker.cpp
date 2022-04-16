@@ -1,4 +1,5 @@
 #include "Tracker.h"
+#include "Utils.h"
 #include <Arduino.h>
 #include <SD.h>
 #include <SPI.h>
@@ -28,8 +29,11 @@ void GPS_TRACKER::Tracker::initLogger() {
     SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
     if (SD.begin(SD_CS)) {
         Serial.println("SD logger");
-        loggerFile = SD.open("/tracker.log", FILE_APPEND);
+        SD.mkdir("/log");
+        String filename = "/log/tracker.log";
+        loggerFile = SD.open(filename, FILE_APPEND);
         logger = Logging::Logger::fileLogger(&loggerFile, Logging::DEBUG);
+        logger->printf(Logging::DEBUG, "Logging to file %s\n", filename);
     } else {
         Serial.println("Serial logger");
         logger = Logging::Logger::serialLogger(Logging::DEBUG);
