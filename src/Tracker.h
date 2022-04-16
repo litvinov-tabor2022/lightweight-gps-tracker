@@ -24,11 +24,11 @@ namespace GPS_TRACKER {
 
         void initAudio();
 
-        void initModem();
+        bool initModem();
 
         bool initSPIFFS();
 
-        void initConfiguration();
+        bool initConfiguration();
 
         void initPins();
 

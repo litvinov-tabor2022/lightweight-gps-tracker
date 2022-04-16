@@ -6,10 +6,7 @@
 bool GPS_TRACKER::Tracker::begin() {
     initLogger();
 
-    audioOutput = new AudioOutputI2S();
-    mp3 = new AudioGeneratorMP3();
-    source = new AudioFileSourceSPIFFS();
-    Serial.println("Initialization start....");
+    logger->println(Logging::INFO, "Initialization start....");
 
     initSPIFFS();
     initConfiguration();
@@ -17,6 +14,8 @@ bool GPS_TRACKER::Tracker::begin() {
     initStateManager();
     initModem();
     initAudio();
+
+    logger->printf(Logging::INFO, "Sleep time %d\n", configuration->CONFIG.sleepTime);
 
     esp_sleep_enable_timer_wakeup(configuration->CONFIG.sleepTime * uS_TO_S_FACTOR);
     registerOnReachedWaypoint();
@@ -44,21 +43,33 @@ void GPS_TRACKER::Tracker::initPins() {
 
 void GPS_TRACKER::Tracker::trackerLoop() {
     // TODO: send position less times when audio is playing (or this loop is iterate more than once)
-    DefaultTasker.loopEvery("loop", 500, [this] {
+    DefaultTasker.loopEvery("loop", 500, [&] {
         GPS_TRACKER::STATUS_CODE res = sim->sendActPosition();
         switch (res) {
-            case GPS_TRACKER::Ok:
-                if (stateManager->distanceToNextWaypoint() > 150) { // don't sleep if the waypoint is close
+            case GPS_TRACKER::Ok: {
+                double distance = stateManager->distanceToNextWaypoint();
+                logger->printf(Logging::INFO, "Distance from next waypoint is: %f\n", distance);
+                if (distance > 150) { // don't sleep if the waypoint is close
                     shouldSleep = true;
+                } else {
+                    logger->println(Logging::INFO,
+                                    "Distance from next waypoint is too short, sleeping will be skipped");
                 }
                 break;
+            }
             case GPS_TRACKER::GPS_CONNECTION_ERROR: // fatal error
                 while (!audioPlayer->playing()) {
                     Tasker::sleep(100);
                 }
                 esp_restart();
+                break;
             default:
-                // noop
+                logger->printf(Logging::ERROR, "Unexpected error, tracker needs restart. (cause : %d)\n", res);
+                while (!audioPlayer->playing()) {
+                    Tasker::sleep(100);
+                }
+                delay(100);
+                esp_restart();
                 break;
         }
 
@@ -78,6 +89,7 @@ void GPS_TRACKER::Tracker::registerOnReachedWaypoint() {
         logger->printf(Logging::INFO, "Waypoint no. %d was reached\n", w.id);
         audioPlayer->enqueueFile(w.path);
     });
+    logger->println(Logging::INFO, "OnReachedWaypoint callback registered");
 }
 
 bool GPS_TRACKER::Tracker::init() {
@@ -91,36 +103,44 @@ void GPS_TRACKER::Tracker::initAudio() {
     audioPlayer = new AudioPlayer::Player(logger, &mp3, &audioOutput, &source, (DEFAULT_VOLUME / 100.0));
     audioPlayer->setVolume(DEFAULT_VOLUME);
     audioPlayer->play();
+    logger->println(Logging::INFO, "Audio module initialized");
 }
 
 void GPS_TRACKER::Tracker::initStateManager() {
 // ------ STATE
     stateManager = new GPS_TRACKER::StateManager(configuration);
     stateManager->begin();
+    logger->println(Logging::INFO, "State manager initialized");
 }
 
-void GPS_TRACKER::Tracker::initModem() {
+bool GPS_TRACKER::Tracker::initModem() {
     // ------ GSM/GPS
     sim = new GPS_TRACKER::SIM7000G(logger, *configuration, stateManager);
     GPS_TRACKER::STATUS_CODE initRes = sim->init();
     if (initRes != GPS_TRACKER::Ok) {
         logger->printf(Logging::ERROR, "Modem initialization failed with code: %u\n", initRes);
+        return false;
+    } else {
+        logger->println(Logging::INFO, "Modem initialized");
+        return true;
     }
 }
 
-void GPS_TRACKER::Tracker::initConfiguration() {
+bool GPS_TRACKER::Tracker::initConfiguration() {
 // ------ CONFIGURATION
     configuration = new GPS_TRACKER::Configuration();
     if (!configuration->read()) {
-        Serial.println("GPS TRACKER INITIALIZATION FAILED!!!!!!!!");
+        logger->println(Logging::ERROR, "GPS TRACKER INITIALIZATION FAILED");
+        return false;
     } else {
-        Serial.printf("Configuration loaded.\n\t # waypoints: %d\n", configuration->WAYPOINTS.size());
+        logger->printf(Logging::INFO, "Configuration loaded.\n\t # waypoints: %d\n", configuration->WAYPOINTS.size());
+        return true;
     }
 }
 
 bool GPS_TRACKER::Tracker::initSPIFFS() {
     if (!SPIFFS.begin()) {
-        Serial.println("SPIFFS init failed.");
+        logger->println(Logging::ERROR, "SPIFFS init failed.");
         return false;
     }
     return true;
