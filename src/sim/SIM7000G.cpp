@@ -147,7 +147,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
       51 GSM and LTE only
     * * * */
     String res;
-    res = modem.setNetworkMode(2);
+    res = modem.setNetworkMode(13);
     if (res != "1") {
         logger->println(Logging::ERROR, "setNetworkMode  false ");
         return false;
@@ -158,7 +158,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
       2 NB-Iot
       3 CAT-M and NB-IoT
     * * */
-    res = modem.setPreferredMode(2);
+    res = modem.setPreferredMode(1);
     if (res != "1") {
         logger->println(Logging::ERROR, "setPreferredMode  false ");
         return false;
@@ -212,8 +212,7 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
                        configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
         if (mqttClient.connect(clientId.c_str(),
                                configuration.MQTT_CONFIG.username.c_str(),
-                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 0, false, "off",
-                               cleanSession)) {
+                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 1, false, "off")) {
             logger->printf(Logging::INFO, " connected to %s, topic: %s, username: %s, password: %s\n",
                            configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.topic.c_str(),
                            configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
