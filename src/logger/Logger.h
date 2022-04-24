@@ -27,11 +27,11 @@ namespace {
             return writtenBytes;
         }
 
-        void flush() override {
-            for (auto stream: streams) {
-                stream->flush();
-            }
-        }
+//        void flush() override {
+//            for (auto stream: streams) {
+//                stream->flush();
+//            }
+//        }
 
     private:
         std::vector<Stream *> streams;
@@ -95,7 +95,7 @@ namespace Logging {
         void println(Level level, const char *string) {
             if (level >= minLevel) {
                 logger->printf("%s %s\n", levelToString(level, tag ).c_str(), string);
-                logger->flush();
+//                logger->flush();
             }
         }
 
@@ -131,7 +131,7 @@ namespace Logging {
                 }
                 logger->print(*format);
             }
-            logger->flush();
+//            logger->flush();
         }
 
         static String levelToString(Level level, const String& prefix = "") {

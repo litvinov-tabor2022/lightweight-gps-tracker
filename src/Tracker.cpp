@@ -1,8 +1,5 @@
 #include "Tracker.h"
-#include "Utils.h"
 #include <Arduino.h>
-#include <SD.h>
-#include <SPI.h>
 
 bool GPS_TRACKER::Tracker::begin() {
     initLogger();
@@ -26,23 +23,13 @@ bool GPS_TRACKER::Tracker::begin() {
 }
 
 void GPS_TRACKER::Tracker::initLogger() {
-    SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
-    if (SD.begin(SD_CS)) {
-        Serial.println("SD logger");
-        SD.mkdir("/log");
-        String filename = "/log/tracker.log";
-        loggerFile = SD.open(filename, FILE_APPEND);
-        logger = Logging::Logger::fileLogger(&loggerFile, Logging::DEBUG);
-        logger->printf(Logging::DEBUG, "Logging to file %s\n", filename);
-    } else {
-        Serial.println("Serial logger");
-        logger = Logging::Logger::serialLogger(Logging::DEBUG);
-    }
+    Serial.println("Serial logger");
+    logger = Logging::Logger::serialLogger(Logging::DEBUG);
     logger->println(Logging::INFO, "Logger initialized");
 }
 
 void GPS_TRACKER::Tracker::initPins() {
-    return;
+    pinMode(LED_PIN, OUTPUT);
 }
 
 void GPS_TRACKER::Tracker::trackerLoop() {
@@ -50,6 +37,9 @@ void GPS_TRACKER::Tracker::trackerLoop() {
     DefaultTasker.loopEvery("loop", 500, [&] {
         GPS_TRACKER::STATUS_CODE res = sim->sendActPosition();
         switch (res) {
+            case GPS_TRACKER::GPS_ACCURACY_TOO_LOW:
+                logger->printf(Logging::ERROR, "Accuracy is too low", res);
+                break;
             case GPS_TRACKER::Ok: {
                 double distance = stateManager->distanceToNextWaypoint();
                 logger->printf(Logging::INFO, "Distance from next waypoint is: %f\n", distance);
@@ -69,11 +59,12 @@ void GPS_TRACKER::Tracker::trackerLoop() {
                 break;
             default:
                 logger->printf(Logging::ERROR, "Unexpected error, tracker needs restart. (cause : %d)\n", res);
-                while (!audioPlayer->playing()) {
+                while (audioPlayer->playing()) {
                     Tasker::sleep(100);
                 }
                 delay(100);
-                esp_restart();
+                // TODO uncomment?
+//                esp_restart();
                 break;
         }
 
