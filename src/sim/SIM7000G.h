@@ -6,9 +6,9 @@
 #define TINY_GSM_MODEM_SIM7000
 #define TINY_GSM_DEBUG Serial
 
-#include "TinyGSM.h"
+#include <TinyGSM.h>
 #include "Protocol.h"
-#include "TinyGsmClient.h"
+#include <TinyGsmClient.h>
 #include "SSLClient.h"
 #include "PubSubClient.h"
 #include "Tasker.h"
@@ -16,6 +16,7 @@
 #include "StreamDebugger.h"
 #include "StateManager.h"
 #include "logger/Logger.h"
+#include <ArduinoHttpClient.h>
 #include <mutex>
 
 namespace GPS_TRACKER {
@@ -79,6 +80,7 @@ namespace GPS_TRACKER {
 
         /**
          * This is blocking function! It blocks thread until the connection with MQTT broker is established.
+         * MQTT connect must be called even if the modem lost internet connection !!
          * */
         bool connectToMqtt();
 
@@ -110,9 +112,12 @@ namespace GPS_TRACKER {
         std::mutex mut; // all operations with
         StreamDebugger *debugger = new StreamDebugger(SerialAT, Serial);
         TinyGsm modem = TinyGsm(SerialAT);
-        TinyGsmClient gsmClient = TinyGsmClient(modem);
+        TinyGsmClient gsmClient = TinyGsmClient(modem, 0);
+        TinyGsmClient gsmClient1 = TinyGsmClient(modem, 1);
         SSLClient gsmClientSSL = SSLClient(&gsmClient);
+        SSLClient gsmClientSSL1 = SSLClient(&gsmClient1);
         PubSubClient mqttClient = PubSubClient(gsmClientSSL);
+        HttpClient http = HttpClient(gsmClientSSL1, SERVER_NAME.c_str(), 443);
         GPS_TRACKER::Configuration configuration;
         GPS_TRACKER::StateManager *stateManager;
         double batteryFullyChargedLimit = 4200;
