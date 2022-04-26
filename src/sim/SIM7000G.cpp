@@ -1,5 +1,6 @@
 #include "SIM7000G.h"
 
+
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     logger->println(Logging::INFO, "Initializing SIM700G module...");
 
@@ -22,9 +23,12 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
 
     if (configuration.GSM_CONFIG.enable) {
         logger->println(Logging::INFO, "Starting MQTT routine");
-        DefaultTasker.loopEvery("mqtt", 100, [this] {
+        DefaultTasker.loopEvery("mqtt", 250, [this] {
             std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-            mqttClient.loop();
+            if (!mqttClient.loop()) {
+                logger->printf(Logging::WARNING, "MQTT LOOP returns false, mqtt state is %d\n", mqttClient.state());
+                reconnect();
+            }
         });
         logger->println(Logging::INFO, "Modem connected to MQTT");
     }
@@ -53,18 +57,14 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(const std::string &data) {
     if (!mqttClient.connected()) {
         logger->printf(Logging::ERROR, "MQTT client error: %d\n", mqttClient.state());
         logger->println(Logging::INFO, "Trying to reconnect ...");
-        if (!reconnect()) return UNKNOWN_ERROR;
+        if (!reconnect()) return MODEM_NOT_CONNECTED;
     }
 
     bool published = mqttClient.publish(configuration.MQTT_CONFIG.topic.c_str(), data.c_str());
     logger->printf(Logging::INFO, "Publish %d chars to MQTT topic %s end with result: %d\n", data.length(),
                    configuration.MQTT_CONFIG.topic.c_str(), published);
 
-    if (published) {
-        return Ok;
-    }
-
-    return READ_GPS_COORDINATES_FAILED;
+    return published ? Ok : SENDING_DATA_FAILED;
 }
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(JsonDocument *data) {
@@ -79,10 +79,10 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(JsonDocument *data) {
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordinates) {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
     if (!isConnected()) {
-        if(!reconnect()) {
-            logger->println(Logging::WARNING, "Modem is not connected");
-            return MODEM_NOT_CONNECTED;
-        }
+//        if (!reconnect()) {
+//            logger->println(Logging::WARNING, "Modem is not connected");
+//        }
+        return MODEM_NOT_CONNECTED;
     }
 
     float lat, lon, speed, alt, accuracy;
@@ -113,8 +113,6 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
 
         return Ok;
     }
-
-//    reconnect();
 
     return READ_GPS_COORDINATES_FAILED;
 }
@@ -188,31 +186,31 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
 
 bool GPS_TRACKER::SIM7000G::connectToMqtt() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-
     logger->println(Logging::INFO, "Connecting to MQTT....");
+
+    mqttClient.disconnect();
     mqttClient.setServer(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
+    mqttClient.setKeepAlive(configuration.CONFIG.sleepTime * uS_TO_S_FACTOR * 2);
 
-    mqttClient.setKeepAlive(40);
+    int attempts = 0;
     int errorAttempts = 0;
-    bool cleanSession = true;
-
-    if (stateManager->getWakeupReason() == ESP_SLEEP_WAKEUP_TIMER) {
-        cleanSession = false;
-    }
 
     // Loop until we're reconnected
-    while (!mqttClient.connected()) {
+    while (!mqttClient.connected() || attempts < 1) {
+        attempts += 1;
         Tasker::yield();
         // Create a random client ID
         String clientId = "TRACKER-";
-        clientId += configuration.CONFIG.trackerId;
+        clientId += configuration.CONFIG.trackerId + String(random(0xffff), HEX);
         // Attempt to connect
         logger->printf(Logging::INFO, "Attempting MQTT connection... host: %s, username: %s, password: %s\n",
                        configuration.MQTT_CONFIG.host.c_str(),
                        configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
+        String willMessage = (String) configuration.CONFIG.trackerId + " is offline";
         if (mqttClient.connect(clientId.c_str(),
                                configuration.MQTT_CONFIG.username.c_str(),
-                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 1, false, "off")) {
+                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 1, true,
+                               willMessage.c_str())) {
             logger->printf(Logging::INFO, " connected to %s, topic: %s, username: %s, password: %s\n",
                            configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.topic.c_str(),
                            configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
@@ -246,6 +244,8 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     }
 
     // update file for fast fix once for 2.5 days
+    logger->printf(Logging::INFO, "Time since last XTRA file update: %s\n",
+                   stateManager->getLastFastFixFileUpdate() - getActTime());
     if (configuration.GPS_CONFIG.fastFix && stateManager->getLastFastFixFileUpdate() - getActTime() >= 216000) {
         fastFix();
         coldStart();
@@ -297,12 +297,12 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
     while (!isConnected() || !isMqttConnected() || !isGpsConnected()) {
         wakeUp();
         if (reconnectAttempts > 5) {
-            esp_restart(); // TODO skipp if playing music
-//            return false;
+            return false;
         }
         if (!isModemConnected()) {
             logger->println(Logging::INFO, "Reconnecting GPRS modem");
-            if (!connectGPRS()) {
+            if (!connectGPRS() ||
+                !connectToMqtt()) { // MQTT reconnect must be called even if the modem lost internet connection
                 reconnectAttempts++;
                 continue;
             }
@@ -409,6 +409,9 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::wakeUp() {
 }
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendActPosition() {
+    if (!reconnect()) {
+        return SENDING_DATA_FAILED;
+    }
     GPSCoordinates coordinates;
     STATUS_CODE actPositionState = actualPosition(&coordinates);
     if (Ok != actPositionState) {

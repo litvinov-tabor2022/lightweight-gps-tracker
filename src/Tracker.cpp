@@ -51,14 +51,15 @@ void GPS_TRACKER::Tracker::trackerLoop() {
                 }
                 break;
             }
-            case GPS_TRACKER::GPS_CONNECTION_ERROR: // fatal error
-                while (!audioPlayer->playing()) {
-                    Tasker::sleep(100);
-                }
-                esp_restart();
+            case GPS_TRACKER::SENDING_DATA_FAILED:
+                logger->println(Logging::WARNING, "Sending actual position to MQTT failed");
+                shouldSleep = false;
+                break;
+            case GPS_TRACKER::SERIALIZATION_ERROR:
+                logger->println(Logging::ERROR, "Serialization error");
                 break;
             default:
-                logger->printf(Logging::ERROR, "Unexpected error, tracker needs restart. (cause : %d)\n", res);
+                logger->printf(Logging::ERROR, "Unknown error, tracker needs to be restarted. (cause : %d)\n", res);
                 while (audioPlayer->playing()) {
                     Tasker::sleep(100);
                 }
