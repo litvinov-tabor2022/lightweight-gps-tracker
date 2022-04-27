@@ -16,21 +16,17 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     }
 
     if (configuration.GSM_CONFIG.enable) {
-        logger->println(Logging::INFO, "Connecting to GSM");
+        logger->println(Logging::INFO, "Connecting to GSM/MQTT");
         if (!connectGPRS()) return GSM_CONNECTION_ERROR;
-        connectToMqtt();
-    }
-
-    if (configuration.GSM_CONFIG.enable) {
+        if (!connectToMqtt()) return MQTT_CONNECTION_ERROR;
         logger->println(Logging::INFO, "Starting MQTT routine");
         DefaultTasker.loopEvery("mqtt", 250, [this] {
             std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
             if (!mqttClient.loop()) {
-                logger->printf(Logging::WARNING, "MQTT LOOP returns false, mqtt state is %d\n", mqttClient.state());
+                logger->println(Logging::WARNING, "MQTT LOOP returns false\n");
                 reconnect();
             }
         });
-        logger->println(Logging::INFO, "Modem connected to MQTT");
     }
 
     if (configuration.GPS_CONFIG.enable) {
@@ -55,12 +51,12 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(const std::string &data) {
 
     logger->println(Logging::INFO, "Start sending routine...");
     if (!mqttClient.connected()) {
-        logger->printf(Logging::ERROR, "MQTT client error: %d\n", mqttClient.state());
+        logger->println(Logging::ERROR, "MQTT client error: %d\n");
         logger->println(Logging::INFO, "Trying to reconnect ...");
         if (!reconnect()) return MODEM_NOT_CONNECTED;
     }
 
-    bool published = mqttClient.publish(configuration.MQTT_CONFIG.topic.c_str(), data.c_str());
+    bool published = mqttClient.publish(configuration.MQTT_CONFIG.topic.c_str(), data.c_str(), false, 1);
     logger->printf(Logging::INFO, "Publish %d chars to MQTT topic %s end with result: %d\n", data.length(),
                    configuration.MQTT_CONFIG.topic.c_str(), published);
 
@@ -132,7 +128,6 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
     if (stateManager->getWakeupReason() != ESP_SLEEP_WAKEUP_TIMER) {
         if (!modem.restart()) {
             logger->println(Logging::WARNING, "Failed to restart modem.");
-            return false;
         }
     }
 
@@ -147,7 +142,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
     String res;
     res = modem.setNetworkMode(13);
     if (res != "1") {
-        logger->println(Logging::ERROR, "setNetworkMode  false ");
+        logger->println(Logging::ERROR, "setNetworkMode failed");
         return false;
     }
 
@@ -156,9 +151,9 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
       2 NB-Iot
       3 CAT-M and NB-IoT
     * * */
-    res = modem.setPreferredMode(1);
+    res = modem.setPreferredMode(2);
     if (res != "1") {
-        logger->println(Logging::ERROR, "setPreferredMode  false ");
+        logger->println(Logging::ERROR, "setPreferredMode failed");
         return false;
     }
 
@@ -189,7 +184,8 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
     logger->println(Logging::INFO, "Connecting to MQTT....");
 
     mqttClient.disconnect();
-    mqttClient.setServer(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
+    mqttClient.begin(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port, gsmClientSSL);
+//    mqttClient.setServer(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
     mqttClient.setKeepAlive(configuration.CONFIG.sleepTime * uS_TO_S_FACTOR * 2);
 
     int attempts = 0;
@@ -198,10 +194,7 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
     // Loop until we're reconnected
     while (!mqttClient.connected() || attempts < 1) {
         attempts += 1;
-        Tasker::yield();
-        // Create a random client ID
-        String clientId = "TRACKER-";
-        clientId += configuration.CONFIG.trackerId + String(random(0xffff), HEX);
+        String clientId = "TRACKER-" + (String) configuration.CONFIG.trackerId;
         // Attempt to connect
         logger->printf(Logging::INFO, "Attempting MQTT connection... host: %s, username: %s, password: %s\n",
                        configuration.MQTT_CONFIG.host.c_str(),
@@ -209,13 +202,12 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
         String willMessage = (String) configuration.CONFIG.trackerId + " is offline";
         if (mqttClient.connect(clientId.c_str(),
                                configuration.MQTT_CONFIG.username.c_str(),
-                               configuration.MQTT_CONFIG.password.c_str(), "gps-tracker/status", 1, true,
-                               willMessage.c_str())) {
+                               configuration.MQTT_CONFIG.password.c_str())) {
             logger->printf(Logging::INFO, " connected to %s, topic: %s, username: %s, password: %s\n",
                            configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.topic.c_str(),
                            configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
         } else {
-            logger->printf(Logging::ERROR, "failed, rc=%d try again in 5 seconds, attempt no. %d\n", mqttClient.state(),
+            logger->printf(Logging::ERROR, "failed, try again in 5 seconds, attempt no. %d\n",
                            errorAttempts);
             errorAttempts++;
             if (errorAttempts > 5) {
@@ -227,6 +219,7 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
         }
     }
 
+    logger->println(Logging::INFO, "Modem connected to MQTT");
     return true;
 }
 
@@ -248,8 +241,8 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
                    stateManager->getLastFastFixFileUpdate() - getActTime());
     if (configuration.GPS_CONFIG.fastFix && stateManager->getLastFastFixFileUpdate() - getActTime() >= 216000) {
         fastFix();
-        coldStart();
         stateManager->setLastFastFixFileUpdate(getActTime());
+        coldStart();
     } else {
         logger->println(Logging::INFO, "Skipping downloading of XTRA file");
         hotStart();

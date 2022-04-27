@@ -10,7 +10,7 @@
 #include "Protocol.h"
 #include <TinyGsmClient.h>
 #include "SSLClient.h"
-#include "PubSubClient.h"
+#include <MQTT.h>
 #include "Tasker.h"
 #include "Configuration.h"
 #include "StreamDebugger.h"
@@ -116,7 +116,7 @@ namespace GPS_TRACKER {
         TinyGsmClient gsmClient1 = TinyGsmClient(modem, 1);
         SSLClient gsmClientSSL = SSLClient(&gsmClient);
         SSLClient gsmClientSSL1 = SSLClient(&gsmClient1);
-        PubSubClient mqttClient = PubSubClient(gsmClientSSL);
+        MQTTClient mqttClient = MQTTClient(1024);
         HttpClient http = HttpClient(gsmClientSSL1, SERVER_NAME.c_str(), 443);
         GPS_TRACKER::Configuration configuration;
         GPS_TRACKER::StateManager *stateManager;
