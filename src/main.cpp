@@ -8,7 +8,9 @@ Tracker tracker;
 void setup() {
     Serial.begin(115200);
     tracker.init();
-    tracker.begin();
+    if (!tracker.begin()) {
+        esp_restart();
+    }
 }
 
 void loop() {

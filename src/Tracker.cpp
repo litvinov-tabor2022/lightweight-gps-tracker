@@ -6,11 +6,16 @@ bool GPS_TRACKER::Tracker::begin() {
 
     logger->println(Logging::INFO, "Initialization start....");
 
-    initSPIFFS();
-    initConfiguration();
-
+    if (!initSPIFFS()) {
+        return false;
+    }
+    if (!initConfiguration()) {
+        return false;
+    }
     initStateManager();
-    initModem();
+    if (!initModem()) {
+        return false;
+    }
     initAudio();
 
     logger->printf(Logging::INFO, "Sleep time %d\n", configuration->CONFIG.sleepTime);
@@ -35,6 +40,7 @@ void GPS_TRACKER::Tracker::initPins() {
 void GPS_TRACKER::Tracker::trackerLoop() {
     // TODO: send position less times when audio is playing (or this loop is iterate more than once)
     DefaultTasker.loopEvery("loop", 500, [&] {
+        digitalWrite(LED_PIN, LOW); // turn led on
         GPS_TRACKER::STATUS_CODE res = sim->sendActPosition();
         switch (res) {
             case GPS_TRACKER::GPS_ACCURACY_TOO_LOW:
@@ -64,13 +70,13 @@ void GPS_TRACKER::Tracker::trackerLoop() {
                     Tasker::sleep(100);
                 }
                 delay(100);
-                // TODO uncomment?
-//                esp_restart();
+                // TODO (un)comment?
+                esp_restart();
                 break;
         }
 
         if (!audioPlayer->playing() && shouldSleep) {
-            digitalWrite(12, HIGH); // turn off led
+            digitalWrite(LED_PIN, HIGH); // turn off led
             sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
             logger->println(Logging::INFO, "Going to sleep");
             esp_light_sleep_start();
