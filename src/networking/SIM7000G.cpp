@@ -1,5 +1,5 @@
 #include "SIM7000G.h"
-
+#include "HwLocks.h"
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     logger->println(Logging::INFO, "Initializing SIM700G module...");
@@ -15,15 +15,8 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     if (configuration.GSM_CONFIG.enable) {
         logger->println(Logging::INFO, "Connecting to GSM/MQTT");
         if (!connectGPRS()) return GSM_CONNECTION_ERROR;
-        if (!connectToMqtt()) return MQTT_CONNECTION_ERROR;
-        logger->println(Logging::INFO, "Starting MQTT routine");
-        DefaultTasker.loopEvery("mqtt", 250, [this] {
-            std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-            if (!mqttClient.loop()) {
-                logger->println(Logging::WARNING, "MQTT LOOP returns false\n");
-                reconnect();
-            }
-        });
+        mqttClient.init(configuration, logger, &gsmClientSSL);
+        if (!mqttClient.begin()) return MQTT_CONNECTION_ERROR;
     }
 
     if (configuration.GPS_CONFIG.enable) {
@@ -43,34 +36,8 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     return Ok;
 }
 
-MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(const std::string &data) {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-
-    logger->println(Logging::INFO, "Start sending routine...");
-    if (!mqttClient.connected()) {
-        logger->println(Logging::ERROR, "MQTT client error: %d\n");
-        logger->println(Logging::INFO, "Trying to reconnect ...");
-        if (!reconnect()) return MODEM_NOT_CONNECTED;
-    }
-
-    bool published = mqttClient.publish(configuration.MQTT_CONFIG.topic.c_str(), data.c_str(), false, 1);
-    logger->printf(Logging::INFO, "Publish %d chars to MQTT topic %s end with result: %d\n", data.length(),
-                   configuration.MQTT_CONFIG.topic.c_str(), published);
-
-    return published ? Ok : SENDING_DATA_FAILED;
-}
-
-MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendData(JsonDocument *data) {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-
-    std::string serialized;
-    serializeJson(*data, serialized);
-
-    return sendData(serialized);
-}
-
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordinates) {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     if (!isConnected()) {
 //        if (!reconnect()) {
 //            logger->println(Logging::WARNING, "Modem is not connected");
@@ -111,14 +78,14 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
 }
 
 bool GPS_TRACKER::SIM7000G::isConnected() {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     logger->printf(Logging::INFO, "is network connected: %b, is gprs connected %b\n", modem.isNetworkConnected(),
                    modem.isGprsConnected());
     return modem.isNetworkConnected() && modem.isGprsConnected();
 }
 
 bool GPS_TRACKER::SIM7000G::connectGPRS() {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     wakeUp();
     SerialAT.begin(UART_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
 
@@ -176,54 +143,8 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
     return true;
 }
 
-bool GPS_TRACKER::SIM7000G::connectToMqtt() {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-    wakeUp();
-
-    logger->println(Logging::INFO, "Connecting to MQTT....");
-
-    mqttClient.disconnect();
-    mqttClient.begin(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port, gsmClientSSL);
-//    mqttClient.setServer(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
-    mqttClient.setKeepAlive(configuration.CONFIG.sleepTime * uS_TO_S_FACTOR * 2);
-
-    int attempts = 0;
-    int errorAttempts = 0;
-
-    // Loop until we're reconnected
-    while (!mqttClient.connected() || attempts < 1) {
-        attempts += 1;
-        String clientId = "TRACKER-" + (String) configuration.CONFIG.trackerId;
-        // Attempt to connect
-        logger->printf(Logging::INFO, "Attempting MQTT connection... host: %s, username: %s, password: %s\n",
-                       configuration.MQTT_CONFIG.host.c_str(),
-                       configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
-        String willMessage = (String) configuration.CONFIG.trackerId + " is offline";
-        if (mqttClient.connect(clientId.c_str(),
-                               configuration.MQTT_CONFIG.username.c_str(),
-                               configuration.MQTT_CONFIG.password.c_str())) {
-            logger->printf(Logging::INFO, " connected to %s, topic: %s, username: %s, password: %s\n",
-                           configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.topic.c_str(),
-                           configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
-        } else {
-            logger->printf(Logging::ERROR, "failed, try again in 5 seconds, attempt no. %d\n",
-                           errorAttempts);
-            errorAttempts++;
-            if (errorAttempts > 5) {
-                logger->println(Logging::ERROR, "MQTT connection error.");
-                return false;
-            }
-            // Wait 5 seconds before retrying
-            Tasker::sleep(5000);
-        }
-    }
-
-    logger->println(Logging::INFO, "Modem connected to MQTT");
-    return true;
-}
-
 bool GPS_TRACKER::SIM7000G::connectGPS() {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     wakeUp();
 
     modem.sendAT("+SGPIO=0,4,1,1");
@@ -266,28 +187,16 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
 }
 
 bool GPS_TRACKER::SIM7000G::isGpsConnected() {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     float lat, lon;
     return modem.getGPS(&lat, &lon);
 }
 
-bool GPS_TRACKER::SIM7000G::isMqttConnected() {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-    if (mqttClient.connected()) {
-        logger->println(Logging::INFO, "MQTT client connected");
-        return true;
-    } else {
-        logger->println(Logging::INFO, "MQTT client disconnected");
-        return false;
-    }
-}
-
-
 bool GPS_TRACKER::SIM7000G::reconnect() {
-    std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     logger->println(Logging::INFO, "Reconnecting");
     int reconnectAttempts = 0;
-    while (!isConnected() || !isMqttConnected() || !isGpsConnected()) {
+    while (!isConnected() || !mqttClient.isConnected() || !isGpsConnected()) {
         wakeUp();
         if (reconnectAttempts > 5) {
             return false;
@@ -295,7 +204,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
         if (!isModemConnected()) {
             logger->println(Logging::INFO, "Reconnecting GPRS modem");
             if (!connectGPRS() ||
-                !connectToMqtt()) { // MQTT reconnect must be called even if the modem lost internet connection
+                !mqttClient.reconnect()) { // MQTT reconnect must be called even if the modem lost internet connection
                 reconnectAttempts++;
                 continue;
             }
@@ -311,9 +220,9 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
         } else {
             Serial.println("GPS modem connected");
         }
-        if (!isMqttConnected()) {
+        if (!mqttClient.isConnected()) {
             logger->println(Logging::INFO, "Reconnecting MQTT client");
-            if (!connectToMqtt()) {
+            if (!mqttClient.reconnect()) {
                 reconnectAttempts++;
                 continue;
             }
@@ -414,14 +323,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendActPosition() {
     stateManager->updatePosition(coordinates);
     Message message(configuration.CONFIG.trackerId, stateManager->getVisitedWaypoints(), coordinates,
                     batteryPercentage());
-    std::string serializeMessage;
-    if (!message.serialize(serializeMessage)) {
-        logger->println(Logging::ERROR, "Message serialization error");
-        return SERIALIZATION_ERROR;
-    }
-    logger->printf(Logging::INFO, "Message: %s\n", serializeMessage.c_str());
-
-    return sendData(serializeMessage);
+    return mqttClient.sendMessage(message) ? Ok : SENDING_DATA_FAILED;
 }
 
 void GPS_TRACKER::SIM7000G::powerOff() {
@@ -447,4 +349,8 @@ double GPS_TRACKER::SIM7000G::batteryPercentage() {
     double tmp = battery() - batteryDischargeVoltage;
     double per = (100 / (batteryFullyChargedLimit - batteryDischargeVoltage)) * tmp;
     return per > 0 ? per : 0;
+}
+
+STATUS_CODE SIM7000G::sendData(JsonDocument *data) {
+    return mqttClient.sendData(data) ? Ok : SENDING_DATA_FAILED;
 }

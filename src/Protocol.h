@@ -3,6 +3,7 @@
 
 #include <utility>
 #include "Arduino.h"
+#include "ArduinoJson.h"
 
 namespace GPS_TRACKER {
     typedef unsigned long Timestamp;
