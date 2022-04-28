@@ -201,7 +201,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
         if (reconnectAttempts > 5) {
             return false;
         }
-        if (!isModemConnected()) {
+        if (!isConnected()) {
             logger->println(Logging::INFO, "Reconnecting GPRS modem");
             if (!connectGPRS() ||
                 !mqttClient.reconnect()) { // MQTT reconnect must be called even if the modem lost internet connection

@@ -76,11 +76,6 @@ namespace GPS_TRACKER {
 
         bool reconnect();
 
-        bool isModemConnected() {
-            std::lock_guard<std::mutex> lg(mut);
-            return modem.isNetworkConnected() && modem.isGprsConnected();
-        }
-
         /**
          * Downloads XTRA file. Call this once ever every three days.
          * */
@@ -98,7 +93,6 @@ namespace GPS_TRACKER {
         void coldStart();
 
         Logging::Logger *logger;
-        std::mutex mut; // all operations with
         StreamDebugger *debugger = new StreamDebugger(SerialAT, Serial);
         TinyGsm modem = TinyGsm(SerialAT);
         TinyGsmClient gsmClient = TinyGsmClient(modem, 0);
