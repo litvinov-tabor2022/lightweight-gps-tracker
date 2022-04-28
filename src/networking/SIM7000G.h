@@ -10,12 +10,12 @@
 #include "Protocol.h"
 #include <TinyGsmClient.h>
 #include "SSLClient.h"
-#include <MQTT.h>
 #include "Tasker.h"
 #include "Configuration.h"
 #include "StreamDebugger.h"
 #include "StateManager.h"
 #include "logger/Logger.h"
+#include "MqttClient.h"
 #include <ArduinoHttpClient.h>
 #include <mutex>
 
@@ -35,8 +35,6 @@ namespace GPS_TRACKER {
 
         STATUS_CODE sendData(JsonDocument *data) override;
 
-        STATUS_CODE sendData(const std::string &data);
-
         /**
          * @return `MODEM_NOT_CONNECTED` if sim module is not connected, `Ok` if position read successfully, otherwise `UNKNOWN_ERROR`
          * */
@@ -50,8 +48,6 @@ namespace GPS_TRACKER {
         bool isConnected();
 
         bool isGpsConnected();
-
-        bool isMqttConnected();
 
         MODEM::STATUS_CODE sendActPosition() override;
 
@@ -78,12 +74,6 @@ namespace GPS_TRACKER {
          * */
         bool connectGPS();
 
-        /**
-         * This is blocking function! It blocks thread until the connection with MQTT broker is established.
-         * MQTT connect must be called even if the modem lost internet connection !!
-         * */
-        bool connectToMqtt();
-
         bool reconnect();
 
         bool isModemConnected() {
@@ -108,7 +98,6 @@ namespace GPS_TRACKER {
         void coldStart();
 
         Logging::Logger *logger;
-        std::recursive_mutex gsm_mutex; // all operations with
         std::mutex mut; // all operations with
         StreamDebugger *debugger = new StreamDebugger(SerialAT, Serial);
         TinyGsm modem = TinyGsm(SerialAT);
@@ -116,7 +105,7 @@ namespace GPS_TRACKER {
         TinyGsmClient gsmClient1 = TinyGsmClient(modem, 1);
         SSLClient gsmClientSSL = SSLClient(&gsmClient);
         SSLClient gsmClientSSL1 = SSLClient(&gsmClient1);
-        MQTTClient mqttClient = MQTTClient(1024);
+        MqttClient mqttClient;
         HttpClient http = HttpClient(gsmClientSSL1, SERVER_NAME.c_str(), 443);
         GPS_TRACKER::Configuration configuration;
         GPS_TRACKER::StateManager *stateManager;

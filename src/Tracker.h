@@ -3,7 +3,7 @@
 
 #include "Configuration.h"
 #include "WiFi.h"
-#include "sim/SIM7000G.h"
+#include "networking/SIM7000G.h"
 #include "SPIFFS.h"
 #include "audio/Player.h"
 #include "AudioFileSourceSPIFFS.h"
