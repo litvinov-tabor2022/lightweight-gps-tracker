@@ -5,15 +5,12 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     logger->println(Logging::INFO, "Initializing SIM700G module...");
 
     // POWER ON GSM MODULE
-    if (stateManager->getWakeupReason() == ESP_SLEEP_WAKEUP_TIMER) {
-        logger->println(Logging::INFO, "Waking up SIM7000G");
-        wakeUp();
-    } else {
-        pinMode(PWR_PIN, OUTPUT);
-        digitalWrite(PWR_PIN, HIGH);
-        delay(300);
-        digitalWrite(PWR_PIN, LOW);
-    }
+    logger->println(Logging::INFO, "Powering on SIM7000G");
+    pinMode(PWR_PIN, OUTPUT);
+    digitalWrite(PWR_PIN, HIGH);
+    delay(300);
+    digitalWrite(PWR_PIN, LOW);
+    logger->println(Logging::INFO, "Waking up SIM7000G");
 
     if (configuration.GSM_CONFIG.enable) {
         logger->println(Logging::INFO, "Connecting to GSM/MQTT");
@@ -122,7 +119,7 @@ bool GPS_TRACKER::SIM7000G::isConnected() {
 
 bool GPS_TRACKER::SIM7000G::connectGPRS() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
-
+    wakeUp();
     SerialAT.begin(UART_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
 
     if (stateManager->getWakeupReason() != ESP_SLEEP_WAKEUP_TIMER) {
@@ -141,7 +138,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
     * * * */
     String res;
     res = modem.setNetworkMode(13);
-    if (res != "1") {
+    if (!res) {
         logger->println(Logging::ERROR, "setNetworkMode failed");
         return false;
     }
@@ -151,8 +148,8 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
       2 NB-Iot
       3 CAT-M and NB-IoT
     * * */
-    res = modem.setPreferredMode(2);
-    if (res != "1") {
+    res = modem.setPreferredMode(1);
+    if (!res) {
         logger->println(Logging::ERROR, "setPreferredMode failed");
         return false;
     }
@@ -181,6 +178,8 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
 
 bool GPS_TRACKER::SIM7000G::connectToMqtt() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    wakeUp();
+
     logger->println(Logging::INFO, "Connecting to MQTT....");
 
     mqttClient.disconnect();
@@ -225,6 +224,7 @@ bool GPS_TRACKER::SIM7000G::connectToMqtt() {
 
 bool GPS_TRACKER::SIM7000G::connectGPS() {
     std::lock_guard<std::recursive_mutex> lg(gsm_mutex);
+    wakeUp();
 
     modem.sendAT("+SGPIO=0,4,1,1");
     if (modem.waitResponse(10000L) != 1) {
