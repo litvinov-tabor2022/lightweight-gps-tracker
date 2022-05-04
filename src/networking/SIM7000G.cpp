@@ -122,10 +122,15 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
     }
 
     bool modemConnectedSuccessfully = false;
-
+    int failedAttempts = 0;
     while (!modemConnectedSuccessfully) {
+        if (failedAttempts > 3) {
+            logger->println(Logging::ERROR, "Connect to network failed! Hard reset may be needed.");
+            return false;
+        }
         logger->println(Logging::INFO, "Waiting for network...");
-        if (!modem.waitForNetwork()) {
+        if (!modem.waitForNetwork(25000)) {
+            failedAttempts++;
             logger->println(Logging::ERROR, " failed!");
             continue;
         }
@@ -195,18 +200,17 @@ bool GPS_TRACKER::SIM7000G::isGpsConnected() {
 bool GPS_TRACKER::SIM7000G::reconnect() {
     std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     logger->println(Logging::INFO, "Reconnecting");
-    int reconnectAttempts = 0;
     while (!isConnected() || !mqttClient.isConnected() || !isGpsConnected()) {
         wakeUp();
-        if (reconnectAttempts > 5) {
-            return false;
-        }
         if (!isConnected()) {
             logger->println(Logging::INFO, "Reconnecting GPRS modem");
-            if (!connectGPRS() ||
-                !mqttClient.reconnect()) { // MQTT reconnect must be called even if the modem lost internet connection
-                reconnectAttempts++;
-                continue;
+            if (!connectGPRS()){
+                modem.sleepEnable(false);
+                modem.poweroff();
+                return false;
+            } else {
+                // MQTT reconnect must be called even if the modem lost internet connection
+                if(!mqttClient.reconnect(2)) return false;
             }
         } else {
             logger->println(Logging::INFO, "GSM modem connected");
@@ -214,17 +218,15 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
         if (!isGpsConnected()) {
             logger->println(Logging::INFO, "Reconnecting GPS");
             if (!connectGPS()) {
-                reconnectAttempts++;
-                continue;
+                return false;
             }
         } else {
             Serial.println("GPS modem connected");
         }
         if (!mqttClient.isConnected()) {
             logger->println(Logging::INFO, "Reconnecting MQTT client");
-            if (!mqttClient.reconnect()) {
-                reconnectAttempts++;
-                continue;
+            if (!mqttClient.reconnect(2)) {
+                return false;
             }
         } else {
             logger->println(Logging::INFO, "MQTT modem connected");
