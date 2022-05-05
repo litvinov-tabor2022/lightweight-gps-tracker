@@ -81,12 +81,11 @@ bool MqttClient::sendString(const std::string &data) {
     logger->println(Logging::INFO, "Start sending routine...");
     if (!isConnected()) {
         logger->println(Logging::ERROR, "MQTT client error while sending data: %d\n");
-        logger->println(Logging::INFO, "Trying to reconnect ...");
-        if (!reconnect(1)) return false;
+        return false;
     }
 
     bool published = mqttClient.publish(configuration.MQTT_CONFIG.topic.c_str(), data.c_str(), false, 1);
-    logger->printf(Logging::INFO, "Publish %d chars to MQTT topic %s end with result: %d\n", data.length(),
+    logger->printf(Logging::INFO, "Publish %d chars to MQTT topic %s ends with result: %d\n", data.length(),
                    configuration.MQTT_CONFIG.topic.c_str(), published);
 
     return published;

@@ -52,7 +52,8 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
         rawTime.tm_year -= 1900;
         rawTime.tm_mon -= 1;
         long timestamp = mktime(&rawTime);
-        logger->printf(Logging::INFO, "lat: %f, lon: %f, alt: %f, timestamp: %ld\n", lat, lon, alt, timestamp);
+        logger->printf(Logging::INFO, "lat: %f, lon: %f, alt: %f, acc: %f, timestamp: %ld\n", lat, lon, alt, accuracy,
+                       timestamp);
 
         // Accuracy is below the minimal threshold
         if (accuracy > configuration.GPS_CONFIG.minimal_accuracy) {
@@ -151,7 +152,7 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     }
 
     if (!modem.enableGPS()) {
-        logger->println(Logging::INFO, "Enabling GPS failed");
+        logger->println(Logging::ERROR, "Enabling GPS failed");
         return false;
     }
 

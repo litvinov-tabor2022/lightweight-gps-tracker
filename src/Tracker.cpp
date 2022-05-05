@@ -58,7 +58,7 @@ void GPS_TRACKER::Tracker::trackerLoop() {
                 break;
             }
             case GPS_TRACKER::SENDING_DATA_FAILED:
-                logger->println(Logging::WARNING, "Sending actual position to MQTT failed");
+                logger->println(Logging::ERROR, "Sending actual position to MQTT failed");
                 shouldSleep = false;
                 break;
             case GPS_TRACKER::SERIALIZATION_ERROR:
@@ -79,8 +79,10 @@ void GPS_TRACKER::Tracker::trackerLoop() {
             digitalWrite(LED_PIN, HIGH); // turn off led
             sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
             logger->println(Logging::INFO, "Going to sleep");
+            delay(100);
             esp_light_sleep_start();
             shouldSleep = false;
+            logger->println(Logging::INFO, "Wake up");
         }
     });
 }
