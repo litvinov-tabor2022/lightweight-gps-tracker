@@ -4,14 +4,6 @@
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
     logger->println(Logging::INFO, "Initializing SIM700G module...");
 
-    // POWER ON GSM MODULE
-    logger->println(Logging::INFO, "Powering on SIM7000G");
-    pinMode(PWR_PIN, OUTPUT);
-    digitalWrite(PWR_PIN, HIGH);
-    delay(300);
-    digitalWrite(PWR_PIN, LOW);
-    logger->println(Logging::INFO, "Waking up SIM7000G");
-
     if (configuration.GSM_CONFIG.enable) {
         logger->println(Logging::INFO, "Connecting to GSM/MQTT");
         if (!connectGPRS()) return GSM_CONNECTION_ERROR;
@@ -155,6 +147,7 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     modem.sendAT("+SGPIO=0,4,1,1");
     if (modem.waitResponse(10000L) != 1) {
         DBG(" SGPIO=0,4,1,1 false ");
+        return false;
     }
 
     if (!modem.enableGPS()) {
@@ -237,6 +230,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
 }
 
 void GPS_TRACKER::SIM7000G::fastFix() {
+    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     modem.sendAT(GF("+CGNSMOD=1,1,1,1"));
     modem.waitResponse();
     std::string cmd = "+SAPBR=3,1, \"APN\",\"" + configuration.GSM_CONFIG.apn + "\"";
@@ -305,6 +299,14 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sleep() {
 }
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::wakeUp() {
+    logger->println(Logging::INFO, "Waking up SIM7000G");
+
+    // POWER ON GSM MODULE
+    pinMode(PWR_PIN, OUTPUT);
+    digitalWrite(PWR_PIN, HIGH);
+    delay(300);
+    digitalWrite(PWR_PIN, LOW);
+
     pinMode(PIN_DTR, OUTPUT);
     digitalWrite(PIN_DTR, LOW);
     delay(80);
@@ -314,7 +316,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::wakeUp() {
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::sendActPosition() {
     if (!reconnect()) {
-        return SENDING_DATA_FAILED;
+        return UNKNOWN_ERROR;
     }
     GPSCoordinates coordinates;
     STATUS_CODE actPositionState = actualPosition(&coordinates);
