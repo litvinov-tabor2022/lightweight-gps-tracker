@@ -57,6 +57,8 @@ namespace GPS_TRACKER {
 
         [[nodiscard]] GPS_TRACKER::Timestamp getLastFastFixFileUpdate() const;
 
+        [[nodiscard]] bool isFastFixFileValid(GPS_TRACKER::Timestamp timestamp) const;
+
         void setLastFastFixFileUpdate(GPS_TRACKER::Timestamp lastFastFixFileUpdate);
 
         [[nodiscard]] esp_sleep_wakeup_cause_t getWakeupReason() const;

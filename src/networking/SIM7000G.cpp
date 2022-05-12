@@ -122,7 +122,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
             return false;
         }
         logger->println(Logging::INFO, "Waiting for network...");
-        if (!modem.waitForNetwork(25000)) {
+        if (!modem.waitForNetwork(5000)) { // 5s timeout
             failedAttempts++;
             logger->println(Logging::ERROR, " failed!");
             continue;
@@ -163,7 +163,7 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     // update file for fast fix once for 2.5 days
     logger->printf(Logging::INFO, "Time since last XTRA file update: %s\n",
                    stateManager->getLastFastFixFileUpdate() - getActTime());
-    if (configuration.GPS_CONFIG.fastFix && stateManager->getLastFastFixFileUpdate() - getActTime() >= 216000) {
+    if (configuration.GPS_CONFIG.fastFix && stateManager->isFastFixFileValid(getActTime())) {
         fastFix();
         stateManager->setLastFastFixFileUpdate(getActTime());
         coldStart();
@@ -175,12 +175,18 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     float lat, lon, speed, alt, accuracy;
     int vsat, usat;
     logger->println(Logging::INFO, "Waiting for GPS");
+    int failedAttempts = 0;
     while (!modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy)) {
+        failedAttempts++;
+        if(failedAttempts > 20 && stateManager->isFastFixFileValid(getActTime())){ // too many attempts and the module is ready to hot start
+            return false;
+        }
         if (this->isConnected()) {
-            logger->println(Logging::DEBUG, modem.getGPSraw());
-            logger->printf(Logging::DEBUG, "vsat: %d, usat: %d\n", vsat, usat);
+            logger->printf(Logging::DEBUG, "%s, attempt no. %d", modem.getGPSraw(), failedAttempts);
+//            logger->printf(Logging::DEBUG, "vsat: %d, usat: %d\n", vsat, usat);
             Tasker::sleep(1500);
         } else {
+            // module disconnected
             return false;
         }
     }
@@ -207,8 +213,9 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
                 modem.poweroff();
                 return false;
             } else {
+                gsmClientSSL = SSLClient(&gsmClient); // reset SSL
                 // MQTT reconnect must be called even if the modem lost internet connection
-                if(!mqttClient.reconnect(2)) return false;
+                if(!mqttClient.reconnect(1)) return false;
             }
         } else {
             logger->println(Logging::INFO, "GSM modem connected");
@@ -223,7 +230,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
         }
         if (!mqttClient.isConnected()) {
             logger->println(Logging::INFO, "Reconnecting MQTT client");
-            if (!mqttClient.reconnect(2)) {
+            if (!mqttClient.reconnect(1)) {
                 return false;
             }
         } else {

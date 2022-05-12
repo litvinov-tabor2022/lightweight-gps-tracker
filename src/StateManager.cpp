@@ -135,3 +135,7 @@ void GPS_TRACKER::StateManager::setNumberOfConnectedDevices(uint8_t no) {
 bool GPS_TRACKER::StateManager::couldSleep() {
     return connectedDevices == 0;
 }
+
+bool GPS_TRACKER::StateManager::isFastFixFileValid(GPS_TRACKER::Timestamp timestamp) const {
+    return lastFastFixFileUpdate - timestamp < 216000;
+}

@@ -9,10 +9,10 @@ void MqttClient::init(Configuration &config, Logging::Logger *log, Client *clien
 
 bool MqttClient::begin() {
     if (connect()) {
-        DefaultTasker.loopEvery("mqtt", 100, [this] {
+        DefaultTasker.loopEvery("mqtt", 250, [this] {
             std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
             if (!mqttClient.loop()) {
-                logger->println(Logging::WARNING, "MQTT loop returns false.");
+                logger->printf(Logging::WARNING, "MQTT loop error: %d\n", mqttClient.lastError());
             }
         });
         return true;
