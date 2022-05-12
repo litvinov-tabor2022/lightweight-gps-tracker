@@ -138,6 +138,10 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
         logger->println(Logging::INFO, " succeed!");
         modemConnectedSuccessfully = true;
     }
+
+    auto *time = new timeval{static_cast<time_t>(getActTime() - (3600 * 2)), 0};
+    settimeofday(time, NULL);
+
     return true;
 }
 

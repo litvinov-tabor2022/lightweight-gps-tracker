@@ -83,18 +83,30 @@ namespace Logging {
         }
 
         void print(Level level, const char *string) {
-            if (level >= minLevel)
+            if (level >= minLevel) {
+                time_t now;
+                time(&now);
+                logger->printf("T: %ld ", now);
                 logger->printf("%s %s", levelToString(level, tag).c_str(), string);
+//                logger->flush();
+            }
         }
 
         void println(Level level, const String &string) {
-            if (level >= minLevel)
+            if (level >= minLevel) {
+                time_t now;
+                time(&now);
+                logger->printf("T: %ld ", now);
                 println(level, string.c_str());
+            }
         }
 
         void println(Level level, const char *string) {
             if (level >= minLevel) {
-                logger->printf("%s %s\n", levelToString(level, tag ).c_str(), string);
+                time_t now;
+                time(&now);
+                logger->printf("T: %ld ", now);
+                logger->printf("%s %s\n", levelToString(level, tag).c_str(), string);
 //                logger->flush();
             }
         }
@@ -102,6 +114,9 @@ namespace Logging {
         template<typename T, typename... Targs>
         void printf(Level level, const char *format, T value, Targs... Fargs) {
             if (level >= minLevel) {
+                time_t now;
+                time(&now);
+                logger->printf("T: %ld ", now);
                 logger->print(levelToString(level, tag) + ' ');
                 rec_printf(format, value, Fargs...);
             }
