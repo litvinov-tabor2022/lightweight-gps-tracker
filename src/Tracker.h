@@ -1,13 +1,12 @@
 #ifndef LIGHTWEIGHT_GPS_TRACKER_TRACKER_H
 #define LIGHTWEIGHT_GPS_TRACKER_TRACKER_H
 
+#include "OtaUpdater.h"
 #include "Configuration.h"
-#include "WiFi.h"
 #include "networking/SIM7000G.h"
 #include "SPIFFS.h"
 #include "audio/Player.h"
 #include "AudioFileSourceSPIFFS.h"
-//#include "networking/WebServer.h"
 
 namespace GPS_TRACKER {
     class Tracker {
@@ -48,7 +47,7 @@ namespace GPS_TRACKER {
         AudioOutputI2S audioOutput;
         AudioGeneratorMP3 mp3;
         AudioFileSourceSPIFFS source;
-//    WebServer *webServer;
+        OtaUpdater *otaUpdater;
     };
 }
 

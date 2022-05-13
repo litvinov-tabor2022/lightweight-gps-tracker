@@ -13,9 +13,14 @@ bool GPS_TRACKER::Tracker::begin() {
         return false;
     }
     initStateManager();
+
     if (!initModem()) {
         return false;
     }
+    otaUpdater = new OtaUpdater();
+
+    otaUpdater->init(stateManager, logger);
+    otaUpdater->begin();
     initAudio();
 
     logger->printf(Logging::INFO, "Sleep time %d\n", configuration->CONFIG.sleepTime);
@@ -75,7 +80,7 @@ void GPS_TRACKER::Tracker::trackerLoop() {
                 break;
         }
 
-        if (!audioPlayer->playing() && shouldSleep) {
+        if (!audioPlayer->playing() && shouldSleep && stateManager->couldSleep()) {
             digitalWrite(LED_PIN, HIGH); // turn off led
             sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
             logger->println(Logging::INFO, "Going to sleep");

@@ -63,6 +63,10 @@ namespace GPS_TRACKER {
 
         double distanceToNextWaypoint();
 
+        void setNumberOfConnectedDevices(uint8_t no);
+
+        bool couldSleep();
+
     private:
         void checkCollision();
 
@@ -90,6 +94,7 @@ namespace GPS_TRACKER {
         GPS_TRACKER::GPSCoordinates actPosition;
         Configuration *configuration;
         esp_sleep_wakeup_cause_t wakeup_reason;
+        uint8_t connectedDevices = 0;
     };
 }
 

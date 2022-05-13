@@ -127,3 +127,11 @@ void GPS_TRACKER::StateManager::setLastFastFixFileUpdate(GPS_TRACKER::Timestamp 
 esp_sleep_wakeup_cause_t GPS_TRACKER::StateManager::getWakeupReason() const {
     return wakeup_reason;
 }
+
+void GPS_TRACKER::StateManager::setNumberOfConnectedDevices(uint8_t no) {
+    connectedDevices = no;
+}
+
+bool GPS_TRACKER::StateManager::couldSleep() {
+    return connectedDevices == 0;
+}
