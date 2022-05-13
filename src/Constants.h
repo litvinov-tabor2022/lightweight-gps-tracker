@@ -3,6 +3,9 @@
 
 #include <string>
 
+static const std::string  SSID = "tracker";
+static const std::string  PASSWORD = "tracker123";
+
 #define SD_MISO     2
 #define SD_MOSI     15
 #define SD_SCLK     14
