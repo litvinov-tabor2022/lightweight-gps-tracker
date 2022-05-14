@@ -40,8 +40,14 @@ void GPS_TRACKER::Tracker::initPins() {
 }
 
 void GPS_TRACKER::Tracker::trackerLoop() {
-    // TODO: send position less times when audio is playing (or this loop is iterate more than once)
-    DefaultTasker.loopEvery("loop", 500, [&] {
+    int failedAttempts = 0;
+    while (!shouldSleep) {
+        if(failedAttempts >= 3){
+            while(audioPlayer->playing()){
+                Tasker::sleep(100);
+            }
+            esp_restart();
+        }
         digitalWrite(LED_PIN, LOW); // turn led on
         GPS_TRACKER::STATUS_CODE res = sim->sendActPosition();
         switch (res) {
@@ -74,19 +80,17 @@ void GPS_TRACKER::Tracker::trackerLoop() {
                 delay(100);
                 // TODO (un)comment?
                 esp_restart();
-                break;
         }
+        failedAttempts++;
+    }
 
-        if (!audioPlayer->playing() && shouldSleep && stateManager->couldSleep()) {
-            digitalWrite(LED_PIN, HIGH); // turn off led
-            sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
-            logger->println(Logging::INFO, "Going to sleep");
-            delay(100);
-            esp_light_sleep_start();
-            shouldSleep = false;
-            logger->println(Logging::INFO, "Wake up");
-        }
-    });
+    if (!audioPlayer->playing() && shouldSleep && stateManager->couldSleep()) {
+        digitalWrite(LED_PIN, HIGH); // turn off led
+        sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
+        logger->println(Logging::INFO, "Going to sleep");
+        delay(100);
+        esp_deep_sleep_start();
+    }
 }
 
 void GPS_TRACKER::Tracker::registerOnReachedWaypoint() {

@@ -15,6 +15,8 @@ namespace GPS_TRACKER {
 
         bool begin();
 
+        void trackerLoop();
+
     private:
 
         void initLogger();
@@ -31,14 +33,11 @@ namespace GPS_TRACKER {
 
         void initPins();
 
-        void trackerLoop();
-
         void registerOnReachedWaypoint();
 
         String trackerSSID = "TRACKER-N/A";
 
         bool shouldSleep = false;
-        File loggerFile;
         Logging::Logger *logger;
         GPS_TRACKER::ISIM *sim;
         GPS_TRACKER::Configuration *configuration;

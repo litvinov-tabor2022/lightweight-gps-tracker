@@ -8,16 +8,7 @@ void MqttClient::init(Configuration &config, Logging::Logger *log, Client *clien
 }
 
 bool MqttClient::begin() {
-    if (connect()) {
-        DefaultTasker.loopEvery("mqtt", 250, [this] {
-            std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
-            if (!mqttClient.loop()) {
-                logger->printf(Logging::WARNING, "MQTT loop error: %d\n", mqttClient.lastError());
-            }
-        });
-        return true;
-    }
-    return false;
+    return connect();
 }
 
 bool MqttClient::connect() {
@@ -35,7 +26,7 @@ bool MqttClient::connect() {
 }
 
 bool MqttClient::reconnect(int maxAttempts) {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
 
     mqttClient.setHost(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
 
@@ -71,12 +62,12 @@ bool MqttClient::reconnect(int maxAttempts) {
 }
 
 bool MqttClient::isConnected() {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
     return mqttClient.connected();
 }
 
 bool MqttClient::sendString(const std::string &data) {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
 
     logger->println(Logging::INFO, "Start sending routine...");
     if (!isConnected()) {
@@ -104,7 +95,7 @@ bool MqttClient::sendMessage(const Message &message) {
 }
 
 bool MqttClient::sendData(JsonDocument *data) {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
 
     std::string serialized;
     serializeJson(*data, serialized);

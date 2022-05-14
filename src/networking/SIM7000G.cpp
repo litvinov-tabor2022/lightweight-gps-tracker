@@ -29,11 +29,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
 }
 
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordinates) {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
     if (!isConnected()) {
-//        if (!reconnect()) {
-//            logger->println(Logging::WARNING, "Modem is not connected");
-//        }
         return MODEM_NOT_CONNECTED;
     }
 
@@ -71,14 +67,14 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
 }
 
 bool GPS_TRACKER::SIM7000G::isConnected() {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
     logger->printf(Logging::INFO, "is network connected: %b, is gprs connected %b\n", modem.isNetworkConnected(),
                    modem.isGprsConnected());
     return modem.isNetworkConnected() && modem.isGprsConnected();
 }
 
 bool GPS_TRACKER::SIM7000G::connectGPRS() {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
     wakeUp();
     SerialAT.begin(UART_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
 
@@ -146,7 +142,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
 }
 
 bool GPS_TRACKER::SIM7000G::connectGPS() {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
     wakeUp();
 
     modem.sendAT("+SGPIO=0,4,1,1");
@@ -196,13 +192,13 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
 }
 
 bool GPS_TRACKER::SIM7000G::isGpsConnected() {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
     float lat, lon;
     return modem.getGPS(&lat, &lon);
 }
 
 bool GPS_TRACKER::SIM7000G::reconnect() {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
     logger->println(Logging::INFO, "Reconnecting");
     while (!isConnected() || !mqttClient.isConnected() || !isGpsConnected()) {
         wakeUp();
@@ -242,7 +238,7 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
 }
 
 void GPS_TRACKER::SIM7000G::fastFix() {
-    std::lock_guard<std::recursive_mutex> lg(HwLocks::SERIAL_LOCK);
+    
     modem.sendAT(GF("+CGNSMOD=1,1,1,1"));
     modem.waitResponse();
     std::string cmd = "+SAPBR=3,1, \"APN\",\"" + configuration.GSM_CONFIG.apn + "\"";
