@@ -124,7 +124,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
         logger->println(Logging::INFO, "Waiting for network...");
         if (!modem.waitForNetwork(25000)) {
             failedAttempts++;
-            logger->println(Logging::ERROR, " failed!");
+            logger->println(Logging::ERROR, "Network connection failed!");
             continue;
         }
 
@@ -132,10 +132,10 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
         if (!modem.gprsConnect(configuration.GSM_CONFIG.apn.c_str(),
                                configuration.GSM_CONFIG.user.c_str(),
                                configuration.GSM_CONFIG.password.c_str())) {
-            logger->println(Logging::ERROR, " failed!");
+            logger->println(Logging::ERROR, "GSM connection failed!");
             continue;
         }
-        logger->println(Logging::INFO, " succeed!");
+        logger->println(Logging::INFO, "GSM connection succeeded!");
         modemConnectedSuccessfully = true;
     }
     return true;
