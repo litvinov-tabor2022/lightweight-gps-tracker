@@ -84,6 +84,10 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
         }
     }
 
+    if (isConnected()) {
+        return true;
+    }
+
     logger->printf(Logging::INFO, "Modem: %s\n", modem.getModemInfo().c_str());
 
     /*
