@@ -29,11 +29,13 @@ void GPS_TRACKER::StateManager::clearMemory() {
 void GPS_TRACKER::StateManager::serialize(JsonDocument *doc) const {
     (*doc)["visited-waypoints"] = visitedWaypoints;
     (*doc)["last-fast-fix-file-update"] = lastFastFixFileUpdate;
+    (*doc)["time-of-last-reset"] = timeOfLastReset;
 }
 
 void GPS_TRACKER::StateManager::deserialize(JsonDocument &doc) {
     visitedWaypoints = doc["visited-waypoints"];
     lastFastFixFileUpdate = doc["last-fast-fix-file-update"];
+    timeOfLastReset = doc["time-of-last-reset"];
 }
 
 void GPS_TRACKER::StateManager::persistState() {
@@ -79,7 +81,7 @@ void GPS_TRACKER::StateManager::checkCollision() {
 }
 
 double GPS_TRACKER::StateManager::distanceToNextWaypoint() {
-    if(visitedWaypoints == configuration->WAYPOINTS.size()){
+    if (visitedWaypoints == configuration->WAYPOINTS.size()) {
         return std::numeric_limits<double>::max();
     }
     auto distanceFromNextWaypointInKm =
@@ -110,8 +112,14 @@ void GPS_TRACKER::StateManager::removePersistedState() {
     clearMemory();
 }
 
-void GPS_TRACKER::StateManager::updatePosition(GPS_TRACKER::GPSCoordinates newPosition) {
+void GPS_TRACKER::StateManager::updatePosition(GPS_TRACKER::GPSCoordinates newPosition, bool shouldBeEnqueued) {
+    if (shouldBeEnqueued) {
+        this->coordinatesBuffer.push_front(newPosition);
+        if (this->coordinatesBuffer.size() > 10)
+            this->coordinatesBuffer.pop_back();
+    }
     actPosition = std::move(newPosition);
+    Serial.printf("%d positions in queue\n", coordinatesBuffer.size());
     checkCollision();
 }
 
@@ -133,9 +141,36 @@ void GPS_TRACKER::StateManager::setNumberOfConnectedDevices(uint8_t no) {
 }
 
 bool GPS_TRACKER::StateManager::couldSleep() {
-    return connectedDevices == 0;
+    return distanceToNextWaypoint() > 150;
 }
 
 bool GPS_TRACKER::StateManager::isFastFixFileValid(GPS_TRACKER::Timestamp timestamp) const {
     return lastFastFixFileUpdate - timestamp < 216000;
+}
+
+void GPS_TRACKER::StateManager::setTimeOfLastReset(GPS_TRACKER::Timestamp timestamp) {
+    this->timeOfLastReset = timestamp;
+}
+
+bool GPS_TRACKER::StateManager::shouldBeRestarted() const {
+    Timestamp timeFromLastReset = (actTime - timeOfLastReset);
+    Serial.printf("time from last reset %lu\n", timeFromLastReset);
+    return (timeFromLastReset > 900 && coordinatesBuffer.empty()) || isRestartNeeded;
+}
+
+void GPS_TRACKER::StateManager::updateActTime(GPS_TRACKER::Timestamp timestamp) {
+    this->actTime = timestamp;
+}
+
+void GPS_TRACKER::StateManager::needsRestart() {
+    Serial.println("tracker needs reset");
+    this->isRestartNeeded = true;
+}
+
+bool GPS_TRACKER::StateManager::getPositionFromBuffer(GPS_TRACKER::GPSCoordinates &coordinates) {
+    if (coordinatesBuffer.empty())
+        return false;
+    coordinates = coordinatesBuffer.front();
+    coordinatesBuffer.pop_front();
+    return true;
 }

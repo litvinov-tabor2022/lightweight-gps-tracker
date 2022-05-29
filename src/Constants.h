@@ -25,6 +25,8 @@ static const std::string  PASSWORD = "tracker123";
 
 
 #define uS_TO_S_FACTOR 1000000
+#define mS_TO_S_FACTOR 1000
+
 static const std::string CONFIG_PATH = "/config.json";
 static const int DEFAULT_VOLUME = 100; // %
 

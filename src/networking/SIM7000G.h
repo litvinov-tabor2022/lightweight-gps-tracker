@@ -26,36 +26,55 @@ namespace GPS_TRACKER {
      * Class for interacting with SIM7000G module.
      * Call init() method before you start calling others.
      * */
-    class SIM7000G : public ISIM {
+    class SIM7000G {
     public:
         explicit SIM7000G(Logging::Logger *logger, GPS_TRACKER::Configuration &config,
                           GPS_TRACKER::StateManager *stateManager) : logger(logger),
                                                                      configuration(config),
                                                                      stateManager(stateManager) {};
 
-        STATUS_CODE sendData(JsonDocument *data) override;
+        STATUS_CODE sendData(JsonDocument *data);
 
         /**
          * @return `MODEM_NOT_CONNECTED` if sim module is not connected, `Ok` if position read successfully, otherwise `UNKNOWN_ERROR`
          * */
-        STATUS_CODE actualPosition(GPSCoordinates *coordinates) override;
+        STATUS_CODE actualPosition(GPSCoordinates *coordinates);
 
         /**
          * @return `Ok` if initialization was successful
          * */
-        STATUS_CODE init() override;
+        STATUS_CODE init();
 
+        /**
+         * Check if the module is connected to the mobile and internet network.
+         * */
+        bool isNetworkConnected();
+
+        /**
+         * Send AT command to the SIM module and waits for OK response (with 5 sec timeout).
+         * */
         bool isConnected();
 
+        /**
+         * Check if the module responding to GPS commands with valid positions.
+         * */
         bool isGpsConnected();
 
-        MODEM::STATUS_CODE sendActPosition() override;
+        /**
+         * @deprecated
+         * */
+        MODEM::STATUS_CODE sendActPosition();
 
-        Timestamp getActTime();
+        /**
+         * Send one specific position via MQTT.
+         * */
+        MODEM::STATUS_CODE sendPosition(GPSCoordinates position);
 
-        MODEM::STATUS_CODE sleep() override;
+        std::optional<Timestamp> getActTime();
 
-        MODEM::STATUS_CODE wakeUp() override;
+        MODEM::STATUS_CODE sleep();
+
+        MODEM::STATUS_CODE wakeUp();
 
         void powerOff();
 
@@ -74,7 +93,13 @@ namespace GPS_TRACKER {
          * */
         bool connectGPS();
 
-        bool reconnect();
+//        bool reconnect();
+
+        bool reconnectGPS();
+
+        bool reconnectGSM();
+
+        void updateTime();
 
         /**
          * Downloads XTRA file. Call this once ever every three days.
@@ -105,6 +130,7 @@ namespace GPS_TRACKER {
         GPS_TRACKER::StateManager *stateManager;
         double batteryFullyChargedLimit = 4200;
         double batteryDischargeVoltage = 2700;
+        Timestamp lastGsmReconnect;
     };
 }
 

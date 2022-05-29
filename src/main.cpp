@@ -34,4 +34,5 @@ void setup() {
 }
 
 void loop() {
+    tracker.trackerLoop();
 }

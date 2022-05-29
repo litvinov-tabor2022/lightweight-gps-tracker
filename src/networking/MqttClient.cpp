@@ -26,18 +26,18 @@ bool MqttClient::connect() {
 }
 
 bool MqttClient::reconnect(int maxAttempts) {
-    
-
+    mqttClient.disconnect();
     mqttClient.setHost(configuration.MQTT_CONFIG.host.c_str(), configuration.MQTT_CONFIG.port);
 
     int errorAttempts = 0;
     while (!mqttClient.connected()) {
         String clientId = "TRACKER-" + (String) configuration.CONFIG.trackerId;
         // Attempt to connect
-        logger->printf(Logging::INFO, "Attempting MQTT connection... host: %s, username: %s, password: %s\n",
+        logger->printf(Logging::INFO,
+                       "Attempting MQTT connection... host: %s, username: %s, password: %s, client: %s\n",
                        configuration.MQTT_CONFIG.host.c_str(),
-                       configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str());
-        String willMessage = (String) configuration.CONFIG.trackerId + " is offline";
+                       configuration.MQTT_CONFIG.username.c_str(), configuration.MQTT_CONFIG.password.c_str(),
+                       clientId.c_str());
         if (mqttClient.connect(clientId.c_str(),
                                configuration.MQTT_CONFIG.username.c_str(),
                                configuration.MQTT_CONFIG.password.c_str())) {
@@ -62,13 +62,10 @@ bool MqttClient::reconnect(int maxAttempts) {
 }
 
 bool MqttClient::isConnected() {
-    
     return mqttClient.connected();
 }
 
 bool MqttClient::sendString(const std::string &data) {
-    
-
     logger->println(Logging::INFO, "Start sending routine...");
     if (!isConnected()) {
         logger->println(Logging::ERROR, "MQTT client error while sending data: %d\n");
@@ -95,8 +92,6 @@ bool MqttClient::sendMessage(const Message &message) {
 }
 
 bool MqttClient::sendData(JsonDocument *data) {
-    
-
     std::string serialized;
     serializeJson(*data, serialized);
 

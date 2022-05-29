@@ -51,13 +51,15 @@ namespace GPS_TRACKER {
 
         void setGsmState(GSM::STATE state);
 
-        void updatePosition(GPS_TRACKER::GPSCoordinates newPosition);
+        void updatePosition(GPS_TRACKER::GPSCoordinates newPosition, bool shouldBeEnqueued = true);
 
         void onReachedWaypoint(std::function<void(const waypoint &)> callback);
 
         [[nodiscard]] GPS_TRACKER::Timestamp getLastFastFixFileUpdate() const;
 
         [[nodiscard]] bool isFastFixFileValid(GPS_TRACKER::Timestamp timestamp) const;
+
+        void setTimeOfLastReset(GPS_TRACKER::Timestamp timestamp);
 
         void setLastFastFixFileUpdate(GPS_TRACKER::Timestamp lastFastFixFileUpdate);
 
@@ -69,6 +71,13 @@ namespace GPS_TRACKER {
 
         bool couldSleep();
 
+        [[nodiscard]] bool shouldBeRestarted() const;
+
+        void updateActTime(GPS_TRACKER::Timestamp timestamp);
+
+        void needsRestart();
+
+        bool getPositionFromBuffer(GPSCoordinates &coordinates);
     private:
         void checkCollision();
 
@@ -86,6 +95,7 @@ namespace GPS_TRACKER {
 
         static inline String stateFile = "/state.json";
 
+        bool isRestartNeeded = false;
         unsigned long lastFastFixFileUpdate = 0;
         AudioPlayer::STATE audioPlayerState = AudioPlayer::STOPPED;
         MQTT::STATE mqttState = MQTT::DISCONNECTED;
@@ -97,6 +107,9 @@ namespace GPS_TRACKER {
         Configuration *configuration;
         esp_sleep_wakeup_cause_t wakeup_reason;
         uint8_t connectedDevices = 0;
+        GPS_TRACKER::Timestamp timeOfLastReset;
+        GPS_TRACKER::Timestamp actTime;
+        std::deque<GPSCoordinates> coordinatesBuffer;
     };
 }
 

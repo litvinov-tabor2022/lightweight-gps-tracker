@@ -17,6 +17,9 @@ bool GPS_TRACKER::Tracker::begin() {
     if (!initModem()) {
         return false;
     }
+    auto timestamp = sim->getActTime();
+    stateManager->setTimeOfLastReset(timestamp.value_or(0));
+    stateManager->updateActTime(timestamp.value_or(0));
 
     initAudio();
 
@@ -24,8 +27,6 @@ bool GPS_TRACKER::Tracker::begin() {
 
     esp_sleep_enable_timer_wakeup(configuration->CONFIG.sleepTime * uS_TO_S_FACTOR);
     registerOnReachedWaypoint();
-    trackerLoop();
-
     return true;
 }
 
@@ -40,56 +41,86 @@ void GPS_TRACKER::Tracker::initPins() {
 }
 
 void GPS_TRACKER::Tracker::trackerLoop() {
-    int failedAttempts = 0;
-    while (!shouldSleep) {
-        if(failedAttempts >= 3){
-            while(audioPlayer->playing()){
-                Tasker::sleep(100);
-            }
-            esp_restart();
+    sim->wakeUp();
+    digitalWrite(LED_PIN, LOW); // turn led on
+    logger->println(Logging::DEBUG, "Reading act time");
+    auto actTime = sim->getActTime();
+    if (actTime.has_value()) {
+        logger->println(Logging::DEBUG, "Updating time");
+        stateManager->updateActTime(actTime.value());
+    }
+    if (millis() - lastUpdate < 25000) {
+        logger->println(Logging::DEBUG, "Fast calling. Skipping tracker loop.");
+        return;
+    }
+    lastUpdate = millis();
+    GPS_TRACKER::STATUS_CODE res = UNKNOWN_ERROR;
+
+    // read GPS position
+    int errorAttempts = 0;
+    while (res != Ok) {
+        // too much unsuccessful reads of GPS position
+        if (errorAttempts > 3) {
+            logger->println(Logging::ERROR, "Reading GPS position failed more times.");
+            stateManager->needsRestart();
+            break;
         }
-        digitalWrite(LED_PIN, LOW); // turn led on
-        GPS_TRACKER::STATUS_CODE res = sim->sendActPosition();
+        GPSCoordinates actPosition;
+        logger->println(Logging::DEBUG, "Reading act position");
+        res = sim->actualPosition(&actPosition);
         switch (res) {
-            case GPS_TRACKER::GPS_ACCURACY_TOO_LOW:
-                logger->printf(Logging::ERROR, "Accuracy is too low", res);
+            case Ok:
+                logger->print(Logging::DEBUG, "Updating and enqueuing position");
+                // insert position to read buffer
+                stateManager->updatePosition(actPosition);
                 break;
-            case GPS_TRACKER::Ok: {
-                double distance = stateManager->distanceToNextWaypoint();
-                logger->printf(Logging::INFO, "Distance from next waypoint is: %f\n", distance);
-                if (distance > 150) { // don't sleep if the waypoint is close
-                    shouldSleep = true;
-                } else {
-                    logger->println(Logging::INFO,
-                                    "Distance from next waypoint is too short, sleeping will be skipped");
-                }
+            case GPS_ACCURACY_TOO_LOW:
+                logger->printf(Logging::WARNING,
+                               "Accuracy is too low. Acc value: %d. This is non critical and can be cause by pour signal quality.",
+                               res);
                 break;
-            }
-            case GPS_TRACKER::SENDING_DATA_FAILED:
-                logger->println(Logging::ERROR, "Sending actual position to MQTT failed");
-                shouldSleep = false;
+            case GPS_CONNECTION_ERROR:
+                logger->println(Logging::ERROR, "GPS connection failed");
                 break;
-            case GPS_TRACKER::SERIALIZATION_ERROR:
-                logger->println(Logging::ERROR, "Serialization error");
+            case READ_GPS_COORDINATES_FAILED:
+                logger->println(Logging::ERROR, "Reading GPS coordinates failed. Check antenna connection.");
+                break;
+            case GPS_COORDINATES_OUT_OF_RANGE:
+                logger->printf(Logging::ERROR, "Coordinates out of range. lat: %l lon: %l\n", actPosition.lat,
+                               actPosition.lon);
                 break;
             default:
-                logger->printf(Logging::ERROR, "Unknown error, tracker needs to be restarted. (cause : %d)\n", res);
-                while (audioPlayer->playing()) {
-                    Tasker::sleep(100);
-                }
-                delay(100);
-                // TODO (un)comment?
-                esp_restart();
+                logger->println(Logging::ERROR, "Unknown GPS error :-(");
         }
-        failedAttempts++;
+
+        // reset will not help with accuracy of GPS position
+        if (res != GPS_ACCURACY_TOO_LOW && res != Ok) {
+            errorAttempts++;
+            delay(250);
+        }
     }
 
-    if (!audioPlayer->playing() && shouldSleep && stateManager->couldSleep()) {
-        digitalWrite(LED_PIN, HIGH); // turn off led
-        sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
-        logger->println(Logging::INFO, "Going to sleep");
-        delay(100);
-        esp_deep_sleep_start();
+    // send GPS position(s)
+    int positionCounter = 0;
+    GPSCoordinates positionToSend;
+    while (stateManager->getPositionFromBuffer(positionToSend)) {
+        logger->printf(Logging::INFO, "Sending position %d from buffer\n", positionCounter++);
+        GPS_TRACKER::STATUS_CODE sendStatus = sim->sendPosition(positionToSend);
+        if (sendStatus != Ok) { // sending failed (try it in next iteration)
+            stateManager->updatePosition(positionToSend);
+            break;
+        }
+    }
+
+    if (stateManager->shouldBeRestarted()) {
+        logger->println(Logging::WARNING, "IN FEW MOMENTS, TRACKER WILL BE RESTARTED");
+        restartTracker();
+    }
+
+    if (stateManager->couldSleep()) {
+        sleepTracker();
+    } else {
+        logger->println(Logging::INFO, "Skipping sleep");
     }
 }
 
@@ -154,4 +185,24 @@ bool GPS_TRACKER::Tracker::initSPIFFS() {
         return false;
     }
     return true;
+}
+
+void Tracker::restartTracker() {
+    logger->println(Logging::INFO, "Restarting tracker");
+    while (audioPlayer->playing()) {
+        Tasker::sleep(100);
+    }
+    esp_restart();
+}
+
+void Tracker::sleepTracker() {
+    while (audioPlayer->playing()) {
+        logger->println(Logging::INFO, "Waiting to end of playback");
+        Tasker::sleep(100);
+    }
+    digitalWrite(LED_PIN, HIGH); // turn off led
+    sim->sleep(); // This is not necessary (now), battery lifetime without sleeping SIM module is good enough
+    logger->println(Logging::INFO, "Going to sleep");
+    delay(100);
+    esp_light_sleep_start();
 }

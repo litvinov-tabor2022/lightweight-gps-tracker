@@ -35,17 +35,22 @@ namespace GPS_TRACKER {
 
         void registerOnReachedWaypoint();
 
+        void restartTracker();
+
+        void sleepTracker();
+
         String trackerSSID = "TRACKER-N/A";
 
         bool shouldSleep = false;
         Logging::Logger *logger;
-        GPS_TRACKER::ISIM *sim;
+        GPS_TRACKER::SIM7000G *sim;
         GPS_TRACKER::Configuration *configuration;
         GPS_TRACKER::StateManager *stateManager;
         AudioPlayer::Player *audioPlayer;
         AudioOutputI2S audioOutput;
         AudioGeneratorMP3 mp3;
         AudioFileSourceSPIFFS source;
+        Timestamp lastUpdate;
     };
 }
 
