@@ -51,6 +51,8 @@ namespace GPS_TRACKER {
 
         void setGsmState(GSM::STATE state);
 
+        void enqueuePosition(const GPS_TRACKER::GPSCoordinates& newPosition);
+
         void updatePosition(GPS_TRACKER::GPSCoordinates newPosition, bool shouldBeEnqueued = true);
 
         void onReachedWaypoint(std::function<void(const waypoint &)> callback);
@@ -101,6 +103,7 @@ namespace GPS_TRACKER {
         MQTT::STATE mqttState = MQTT::DISCONNECTED;
         GSM::STATE gsmState = GSM::DISCONNECTED;
 
+        int bufferSizeLimit = 10;
         size_t visitedWaypoints = 0;
         std::function<void(const waypoint &)> newWaypointReachedCallback;
         GPS_TRACKER::GPSCoordinates actPosition;

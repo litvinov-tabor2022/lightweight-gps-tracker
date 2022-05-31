@@ -70,7 +70,7 @@ void GPS_TRACKER::Tracker::trackerLoop() {
         res = sim->actualPosition(&actPosition);
         switch (res) {
             case Ok:
-                logger->print(Logging::DEBUG, "Updating and enqueuing position");
+                logger->println(Logging::DEBUG, "Updating and enqueuing position");
                 // insert position to read buffer
                 stateManager->updatePosition(actPosition);
                 break;
@@ -107,7 +107,8 @@ void GPS_TRACKER::Tracker::trackerLoop() {
         logger->printf(Logging::INFO, "Sending position %d from buffer\n", positionCounter++);
         GPS_TRACKER::STATUS_CODE sendStatus = sim->sendPosition(positionToSend);
         if (sendStatus != Ok) { // sending failed (try it in next iteration)
-            stateManager->updatePosition(positionToSend);
+            logger->println(Logging::WARNING, "Sending position failed.");
+            stateManager->enqueuePosition(positionToSend);
             break;
         }
     }

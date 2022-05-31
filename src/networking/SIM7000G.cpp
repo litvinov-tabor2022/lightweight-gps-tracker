@@ -61,7 +61,8 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
         return Ok;
     }
 
-    return connectGPS() ? READ_GPS_COORDINATES_FAILED : MODEM_NOT_CONNECTED;
+    resetGPS();
+    return connectGPS(5) ? READ_GPS_COORDINATES_FAILED : MODEM_NOT_CONNECTED;
 }
 
 bool GPS_TRACKER::SIM7000G::isConnected() {
@@ -144,7 +145,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
     return true;
 }
 
-bool GPS_TRACKER::SIM7000G::connectGPS() {
+bool GPS_TRACKER::SIM7000G::connectGPS(int attemptsLimit) {
 
     wakeUp();
 
@@ -182,6 +183,7 @@ bool GPS_TRACKER::SIM7000G::connectGPS() {
     int failedAttempts = 0;
     while (!modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy)) {
         failedAttempts++;
+        if (failedAttempts > attemptsLimit) return false;
         if (failedAttempts > 20     // too many attempts
             && actTime.has_value()  // and the module is ready to hot start
             && stateManager->isFastFixFileValid(actTime.value())) {
@@ -224,11 +226,11 @@ bool GPS_TRACKER::SIM7000G::reconnectGPS() {
 
 bool GPS_TRACKER::SIM7000G::reconnectGSM() {
     logger->printf(Logging::DEBUG, "Time since last reconnect: %d\n", millis() - lastGsmReconnect);
-    if ((millis() - lastGsmReconnect) < (60 * mS_TO_S_FACTOR)) {
-        logger->println(Logging::DEBUG, "Skipping GSM reconnect routine");
-        return false;
-    }
     if (!isNetworkConnected()) {
+        if ((millis() - lastGsmReconnect) < (configuration.GSM_CONFIG.reconnectTime * mS_TO_S_FACTOR)) {
+            logger->println(Logging::DEBUG, "Skipping GSM reconnect routine");
+            return false;
+        }
         lastGsmReconnect = millis();
         logger->println(Logging::INFO, "Reconnecting GPRS modem");
         if (!connectGPRS()) {
@@ -450,4 +452,26 @@ void SIM7000G::updateTime() {
         auto *time = new timeval{static_cast<time_t>(actTime.value() - (3600 * 2)), 0};
         settimeofday(time, NULL);
     }
+}
+
+bool SIM7000G::resetGPS() {
+    if(!modem.disableGPS()){
+        logger->println(Logging::ERROR, "GPS can not be disabled");
+        return false;
+    }
+    modem.sendAT("+SGPIO=1,4,1,1"); // power off GPS
+    if (modem.waitResponse(1000L) != 1) {
+        logger->println(Logging::ERROR, "Powering off GPS failed");
+        return false;
+    }
+    modem.sendAT("+SGPIO=0,4,1,1"); // power on GPS
+    if (modem.waitResponse(1000L) != 1) {
+        logger->println(Logging::ERROR, "Powering on GPS failed");
+        return false;
+    }
+    if(!modem.enableGPS()){
+        logger->println(Logging::ERROR, "GPS can not be enabled");
+        return false;
+    }
+    return true;
 }

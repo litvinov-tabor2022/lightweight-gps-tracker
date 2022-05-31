@@ -14,53 +14,46 @@ namespace GPS_TRACKER {
     struct gps_config {
         explicit gps_config() = default;
 
-        gps_config(bool enable, int samplingRate, bool fastFix, double minimalAccuracy, int positionSampleFrequency,
-                   int noPositionsInReport) :
+        gps_config(bool enable, bool fastFix, double minimalAccuracy) :
                 enable(enable),
-                samplingRate(samplingRate),
                 fastFix(fastFix),
-                minimal_accuracy(minimalAccuracy),
-                positionSampleFrequency(positionSampleFrequency),
-                noPositionsInReport(noPositionsInReport) {}
+                minimal_accuracy(minimalAccuracy) {}
 
         static gps_config build(JsonVariant &c) {
             return {
                     c["enable"].as<bool>(),
-                    c["sampling-rate"].as<int>(),
                     c["fast-fix"].as<bool>(),
-                    c["minimal-accuracy"].as<double>(),
-                    c["positions-in-report"].as<int>(),
-                    c["positions-in-report"].as<int>()
+                    c["minimal-accuracy"].as<double>()
             };
         }
 
         bool enable = false;
-        int samplingRate = 1000;
         bool fastFix = false;
         double minimal_accuracy = 0;
-        int positionSampleFrequency = 1;
-        int noPositionsInReport = 2;
     };
 
     struct gsm_config {
         explicit gsm_config() = default;
 
-        gsm_config(bool enable, std::string apn, std::string user, std::string password) : enable(
-                enable), apn(std::move(apn)), user(std::move(user)), password(std::move(password)) {}
+        gsm_config(bool enable, std::string apn, std::string user, std::string password, int reconnectTime) : enable(
+                enable), apn(std::move(apn)), user(std::move(user)), password(std::move(password)), reconnectTime(
+                reconnectTime) {}
 
         static gsm_config build(JsonVariant &c) {
-            return gsm_config(
+            return {
                     c["enable"].as<bool>(),
                     c["apn"].as<std::string>(),
                     c["user"].as<std::string>(),
-                    c["password"].as<std::string>()
-            );
+                    c["password"].as<std::string>(),
+                    c["reconnect-time"].as<int>()
+            };
         }
 
         bool enable = false;
         std::string apn;
         std::string user;
         std::string password;
+        int reconnectTime = 0;
     };
 
     struct mqtt_config {

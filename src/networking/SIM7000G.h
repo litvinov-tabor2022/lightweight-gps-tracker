@@ -9,7 +9,8 @@
 #include <TinyGSM.h>
 #include "Protocol.h"
 #include <TinyGsmClient.h>
-#include "SSLClient.h"
+#include "Certificates.h"
+#include <SSLClient.h>
 #include "Tasker.h"
 #include "Configuration.h"
 #include "StreamDebugger.h"
@@ -91,11 +92,13 @@ namespace GPS_TRACKER {
         /**
          * This is blocking function! It blocks thread until the GSP position is fixed.
          * */
-        bool connectGPS();
+        bool connectGPS(int attemptsLimit = std::numeric_limits<int>::max());
 
 //        bool reconnect();
 
         bool reconnectGPS();
+
+        bool resetGPS();
 
         bool reconnectGSM();
 
@@ -121,11 +124,11 @@ namespace GPS_TRACKER {
         StreamDebugger *debugger = new StreamDebugger(SerialAT, Serial);
         TinyGsm modem = TinyGsm(SerialAT);
         TinyGsmClient gsmClient = TinyGsmClient(modem, 0);
-        TinyGsmClient gsmClient1 = TinyGsmClient(modem, 1);
-        SSLClient gsmClientSSL = SSLClient(&gsmClient);
-        SSLClient gsmClientSSL1 = SSLClient(&gsmClient1);
+//        TinyGsmClient gsmClient1 = TinyGsmClient(modem, 1);
+        SSLClient gsmClientSSL = SSLClient(gsmClient, TAs, (size_t)TAs_NUM, A5);
+//        SSLClient gsmClientSSL1 = SSLClient(&gsmClient1);
         MqttClient mqttClient;
-        HttpClient http = HttpClient(gsmClientSSL1, SERVER_NAME.c_str(), 443);
+//        HttpClient http = HttpClient(gsmClientSSL1, SERVER_NAME.c_str(), 443);
         GPS_TRACKER::Configuration configuration;
         GPS_TRACKER::StateManager *stateManager;
         double batteryFullyChargedLimit = 4200;

@@ -1,7 +1,9 @@
 #include "StateManager.h"
 
 GPS_TRACKER::StateManager::StateManager(GPS_TRACKER::Configuration *configuration) :
-        configuration(configuration) {}
+        configuration(configuration) {
+    bufferSizeLimit = (configuration->GSM_CONFIG.reconnectTime / configuration->CONFIG.sleepTime) * 2;
+}
 
 void GPS_TRACKER::StateManager::begin() {
     loadPersistState();
@@ -114,9 +116,7 @@ void GPS_TRACKER::StateManager::removePersistedState() {
 
 void GPS_TRACKER::StateManager::updatePosition(GPS_TRACKER::GPSCoordinates newPosition, bool shouldBeEnqueued) {
     if (shouldBeEnqueued) {
-        this->coordinatesBuffer.push_front(newPosition);
-        if (this->coordinatesBuffer.size() > 10)
-            this->coordinatesBuffer.pop_back();
+        enqueuePosition(newPosition);
     }
     actPosition = std::move(newPosition);
     Serial.printf("%d positions in queue\n", coordinatesBuffer.size());
@@ -154,7 +154,7 @@ void GPS_TRACKER::StateManager::setTimeOfLastReset(GPS_TRACKER::Timestamp timest
 
 bool GPS_TRACKER::StateManager::shouldBeRestarted() const {
     Timestamp timeFromLastReset = (actTime - timeOfLastReset);
-    Serial.printf("time from last reset %lu\n", timeFromLastReset);
+    Serial.printf("seconds since last reset: %lu\n", timeFromLastReset);
     return (timeFromLastReset > 900 && coordinatesBuffer.empty()) || isRestartNeeded;
 }
 
@@ -173,4 +173,10 @@ bool GPS_TRACKER::StateManager::getPositionFromBuffer(GPS_TRACKER::GPSCoordinate
     coordinates = coordinatesBuffer.front();
     coordinatesBuffer.pop_front();
     return true;
+}
+
+void GPS_TRACKER::StateManager::enqueuePosition(const GPS_TRACKER::GPSCoordinates& newPosition) {
+    this->coordinatesBuffer.push_front(newPosition);
+    if (this->coordinatesBuffer.size() > bufferSizeLimit)
+        this->coordinatesBuffer.pop_back();
 }
