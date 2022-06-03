@@ -61,7 +61,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
         return Ok;
     }
 
-    resetGPS();
+    if(!resetGPS()) return GPS_CONNECTION_ERROR;
     return connectGPS(5) ? READ_GPS_COORDINATES_FAILED : MODEM_NOT_CONNECTED;
 }
 
@@ -455,13 +455,13 @@ void SIM7000G::updateTime() {
 }
 
 bool SIM7000G::resetGPS() {
-    if(!modem.disableGPS()){
-        logger->println(Logging::ERROR, "GPS can not be disabled");
-        return false;
-    }
-    modem.sendAT("+SGPIO=1,4,1,1"); // power off GPS
+    modem.sendAT("+SGPIO=0,4,1,0"); // power off GPS
     if (modem.waitResponse(1000L) != 1) {
         logger->println(Logging::ERROR, "Powering off GPS failed");
+        return false;
+    }
+    if(!modem.disableGPS()){
+        logger->println(Logging::ERROR, "GPS can not be disabled");
         return false;
     }
     modem.sendAT("+SGPIO=0,4,1,1"); // power on GPS

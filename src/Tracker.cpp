@@ -60,7 +60,7 @@ void GPS_TRACKER::Tracker::trackerLoop() {
     int errorAttempts = 0;
     while (res != Ok) {
         // too much unsuccessful reads of GPS position
-        if (errorAttempts > 3) {
+        if (errorAttempts >= 3) {
             logger->println(Logging::ERROR, "Reading GPS position failed more times.");
             stateManager->needsRestart();
             break;
