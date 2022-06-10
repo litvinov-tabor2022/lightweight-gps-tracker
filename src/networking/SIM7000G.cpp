@@ -39,7 +39,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
 
     float lat, lon, speed, alt, accuracy;
     int vsat, usat;
-    tm rawTime{};
+    tm rawTime{}; // unused
 
     if (modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy, &rawTime.tm_year, &rawTime.tm_mon,
                      &rawTime.tm_mday, &rawTime.tm_hour, &rawTime.tm_min, &rawTime.tm_sec)) {
@@ -49,11 +49,10 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
             return GPS_COORDINATES_OUT_OF_RANGE;
         }
 
-        rawTime.tm_year -= 1900;
-        rawTime.tm_mon -= 1;
-        long timestamp = mktime(&rawTime);
-        logger->printf(Logging::INFO, "lat: %f, lon: %f, alt: %f, acc: %f, timestamp: %ld\n", lat, lon, alt, accuracy,
-                       timestamp);
+        time_t timestamp;
+        time(&timestamp);
+        logger->printf(Logging::INFO, "lat: %f, lon: %f, alt: %f, acc: %f, timestamp: %l\n",
+                       lat, lon, alt, accuracy, timestamp);
 
         // Accuracy is below the minimal threshold
         if (accuracy > configuration.GPS_CONFIG.minimal_accuracy) {
@@ -198,13 +197,13 @@ bool GPS_TRACKER::SIM7000G::reconnect() {
         wakeUp();
         if (!isConnected()) {
             logger->println(Logging::INFO, "Reconnecting GPRS modem");
-            if (!connectGPRS()){
+            if (!connectGPRS()) {
                 modem.sleepEnable(false);
                 modem.poweroff();
                 return false;
             } else {
                 // MQTT reconnect must be called even if the modem lost internet connection
-                if(!mqttClient.reconnect(2)) return false;
+                if (!mqttClient.reconnect(2)) return false;
             }
         } else {
             logger->println(Logging::INFO, "GSM modem connected");
