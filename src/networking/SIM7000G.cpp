@@ -34,7 +34,9 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::init() {
 MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordinates) {
     float lat, lon, speed, alt, accuracy;
     int vsat, usat;
-    tm rawTime{};
+
+    tm rawTime{}; // unused
+
     if (modem.getGPS(&lat, &lon, &speed, &alt, &vsat, &usat, &accuracy, &rawTime.tm_year, &rawTime.tm_mon,
                      &rawTime.tm_mday, &rawTime.tm_hour, &rawTime.tm_min, &rawTime.tm_sec)) {
         // Position is out of range
@@ -43,11 +45,11 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
             return GPS_COORDINATES_OUT_OF_RANGE;
         }
 
-        rawTime.tm_year -= 1900;
-        rawTime.tm_mon -= 1;
-        long timestamp = mktime(&rawTime);
-        logger->printf(Logging::INFO, "lat: %f, lon: %f, alt: %f, acc: %f, timestamp: %ld\n", lat, lon, alt, accuracy,
-                       timestamp);
+        time_t timestamp;
+        time(&timestamp);
+        logger->printf(Logging::INFO, "lat: %f, lon: %f, alt: %f, acc: %f, timestamp: %l\n",
+                       lat, lon, alt, accuracy, timestamp);
+
 
         // Accuracy is below the minimal threshold
         if (accuracy > configuration.GPS_CONFIG.minimal_accuracy) {
@@ -61,7 +63,7 @@ MODEM::STATUS_CODE GPS_TRACKER::SIM7000G::actualPosition(GPSCoordinates *coordin
         return Ok;
     }
 
-    if(!resetGPS()) return GPS_CONNECTION_ERROR;
+    if (!resetGPS()) return GPS_CONNECTION_ERROR;
     return connectGPS(5) ? READ_GPS_COORDINATES_FAILED : MODEM_NOT_CONNECTED;
 }
 
@@ -127,7 +129,7 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
         logger->println(Logging::INFO, "Waiting for network...");
         if (!modem.waitForNetwork(5000)) { // 5s timeout
             failedAttempts++;
-            logger->println(Logging::ERROR, " failed!");
+            logger->println(Logging::ERROR, "Network connection failed!");
             continue;
         }
 
@@ -135,10 +137,10 @@ bool GPS_TRACKER::SIM7000G::connectGPRS() {
         if (!modem.gprsConnect(configuration.GSM_CONFIG.apn.c_str(),
                                configuration.GSM_CONFIG.user.c_str(),
                                configuration.GSM_CONFIG.password.c_str())) {
-            logger->println(Logging::ERROR, " failed!");
+            logger->println(Logging::ERROR, "GSM connection failed!");
             continue;
         }
-        logger->println(Logging::INFO, " succeed!");
+        logger->println(Logging::INFO, "GSM connection succeeded!");
         modemConnectedSuccessfully = true;
     }
     updateTime();
@@ -191,7 +193,7 @@ bool GPS_TRACKER::SIM7000G::connectGPS(int attemptsLimit) {
         }
 
         if (modem.testAT()) {
-            logger->printf(Logging::DEBUG, "%s, attempt no. %d", modem.getGPSraw(), failedAttempts);
+            logger->printf(Logging::DEBUG, "%s, attempt no. %d\n", modem.getGPSraw(), failedAttempts);
 //            logger->printf(Logging::DEBUG, "vsat: %d, usat: %d\n", vsat, usat);
             Tasker::sleep(1500);
         } else {
@@ -460,7 +462,7 @@ bool SIM7000G::resetGPS() {
         logger->println(Logging::ERROR, "Powering off GPS failed");
         return false;
     }
-    if(!modem.disableGPS()){
+    if (!modem.disableGPS()) {
         logger->println(Logging::ERROR, "GPS can not be disabled");
         return false;
     }
@@ -469,7 +471,7 @@ bool SIM7000G::resetGPS() {
         logger->println(Logging::ERROR, "Powering on GPS failed");
         return false;
     }
-    if(!modem.enableGPS()){
+    if (!modem.enableGPS()) {
         logger->println(Logging::ERROR, "GPS can not be enabled");
         return false;
     }
